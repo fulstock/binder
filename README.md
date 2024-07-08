@@ -47,9 +47,9 @@ python data_preproc/brat_to_hfds.py --brat_dataset_path ./data/NEREL --hfds_outp
 python ./run_ner.py ./conf/lexical-conf.json
 ```
 
-Параметры самой модели указаны в исходной [https://github.com/microsoft/binder/blob/54c74ba6e5eac37203ff530cd472e8b65d248ff0/run_ner.py#L94](архитектуре).
+Параметры самой модели указаны в исходной [архитектуре](https://github.com/microsoft/binder/blob/54c74ba6e5eac37203ff530cd472e8b65d248ff0/run_ner.py#L94).
 
-Остальные параметры передаются в `transformers.Trainer` как `transformers.TrainingArguments`. Подробнее о них можно прочесть в [https://huggingface.co/docs/transformers/v4.24.0/en/main_classes/trainer#transformers.TrainingArguments](документации).
+Остальные параметры передаются в `transformers.Trainer` как `transformers.TrainingArguments`. Подробнее о них можно прочесть в [документации](https://huggingface.co/docs/transformers/v4.24.0/en/main_classes/trainer#transformers.TrainingArguments).
 
 Пример конфигурационного файла с параметрами по умолчанию представлен в `conf/lexical-conf.json`.
 
