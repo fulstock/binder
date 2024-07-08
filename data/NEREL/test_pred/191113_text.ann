@@ -1,0 +1,59 @@
+T1	PERSON 0 16	Евгения Чудновец
+T2	DATE 72 90	26 марта 2017 года
+T3	PERSON 91 101	Oxxxymiron
+T4	CITY 119 135	Санкт-Петербурга
+T5	DATE 137 157	28 октября 2017 года
+T6	DATE 158 178	30 октября 2018 года
+T7	CITY 179 195	екатеринбурженка
+T8	PERSON 196 212	Евгения Чудновец
+T9	FACILITY 278 290	Красные орлы
+T10	ORGANIZATION 278 290	Красные орлы
+T11	PROFESSION 319 325	рэпера
+T12	PERSON 326 336	Oxxxymiron
+T13	ORGANIZATION 338 345	YouTube
+T14	PRODUCT 338 345	YouTube
+T15	COUNTRY 371 377	России
+T16	PROFESSION 538 604	Член экспертного совета по развитию информационного общества и СМИ
+T17	PROFESSION 538 616	Член экспертного совета по развитию информационного общества и СМИ при Госдуме
+T18	ORGANIZATION 543 604	экспертного совета по развитию информационного общества и СМИ
+T19	ORGANIZATION 543 616	экспертного совета по развитию информационного общества и СМИ при Госдуме
+T20	ORGANIZATION 609 616	Госдуме
+T21	EVENT 691 701	расстрелом
+T22	CITY 722 727	Керчи
+T23	ORGANIZATION 745 757	Роскомнадзор
+T24	EVENT 803 821	массового убийства
+T25	EVENT 813 821	убийства
+T26	NUMBER 847 849	20
+T27	PERSON 869 877	Чудновец
+T28	COUNTRY 1027 1037	эстонского
+T29	NATIONALITY 1027 1037	эстонского
+T30	NUMBER 1074 1078	двое
+T31	EVENT 1097 1105	стрельбу
+T32	AGE 1200 1209	34-летняя
+T33	PROFESSION 1210 1220	активистка
+T34	DATE 1256 1263	Сегодня
+T35	ORGANIZATION 1264 1276	Роскомназдор
+T36	ORGANIZATION 1264 1290	Роскомназдор во «ВКонтакте
+T37	ORGANIZATION 1281 1290	ВКонтакте
+T38	PRODUCT 1281 1290	ВКонтакте
+T39	EVENT 1399 1419	массовых беспорядков
+T40	EVENT 1421 1437	массовых убийств
+T41	ORGANIZATION 1561 1573	Роскомнадзор
+T42	ORGANIZATION 1585 1599	Генпрокуратуры
+T43	PROFESSION 1600 1614	администраторы
+T44	PROFESSION 1600 1621	администраторы сайтов
+T45	PROFESSION 1600 1629	администраторы сайтов YouTube
+T46	ORGANIZATION 1622 1629	YouTube
+T47	PRODUCT 1622 1629	YouTube
+T48	ORGANIZATION 1631 1639	Facebook
+T49	PRODUCT 1631 1639	Facebook
+T50	PRODUCT 1631 1650	Facebook, ВКонтакте
+T51	ORGANIZATION 1641 1650	ВКонтакте
+T52	PRODUCT 1641 1650	ВКонтакте
+T53	PRODUCT 1653 1666	Одноклассники
+T54	COUNTRY 1699 1705	России
+T55	NUMBER 1708 1721	более чем 860
+T56	NUMBER 1718 1721	860
+T57	ORGANIZATION 1783 1791	Facebook
+T58	PRODUCT 1783 1791	Facebook
+T59	PERSON 1792 1808	Евгения Чудновец

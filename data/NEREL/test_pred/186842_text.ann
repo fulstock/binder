@@ -1,0 +1,34 @@
+T1	COUNTRY 0 9	Китайская
+T2	NATIONALITY 0 9	Китайская
+T3	PROFESSION 0 17	Китайская актриса
+T4	PROFESSION 10 17	актриса
+T5	MONEY 33 41	$129 млн
+T6	PROFESSION 62 69	Актриса
+T7	DATE 83 91	2013 год
+T8	COUNTRY 92 101	Китайская
+T9	NATIONALITY 92 101	Китайская
+T10	PROFESSION 102 109	актриса
+T11	PERSON 110 121	Фань Бинбин
+T12	MONEY 153 169	129 млн долларов
+T13	MONEY 153 190	129 млн долларов (около 884 млн юаней
+T14	MONEY 171 190	около 884 млн юаней
+T15	DATE 224 243	3 октября 2018 года
+T16	AGE 285 294	37-летняя
+T17	PROFESSION 295 302	актриса
+T18	CITY 322 334	голливудском
+T19	EVENT 343 351	Люди Икс
+T20	EVENT 353 375	Дни минувшего будущего
+T21	DATE 403 421	более трёх месяцев
+T22	EVENT 426 438	исчезновение
+T23	EVENT 467 474	арестом
+T24	DATE 477 484	Сегодня
+T25	PROFESSION 485 492	актриса
+T26	PRODUCT 520 525	Weibo
+T27	PROFESSION 690 697	Актриса
+T28	ORGANIZATION 717 740	Коммунистической партии
+T29	ORGANIZATION 717 746	Коммунистической партии Китая
+T30	COUNTRY 741 746	Китая
+T31	ORGANIZATION 883 889	Forbes
+T32	DATE 891 915	за период 2003—2016 годы
+T33	DATE 901 915	2003—2016 годы
+T34	PROFESSION 916 923	актриса

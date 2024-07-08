@@ -1,0 +1,5 @@
+transformers==4.24.0
+datasets==2.16.1
+wandb==0.13.5
+numpy==1.26.4
+seqeval==1.2.2

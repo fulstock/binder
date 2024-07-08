@@ -1,0 +1,79 @@
+T1	COUNTRY 0 13	Индонезийский
+T2	NATIONALITY 0 13	Индонезийский
+T3	PROFESSION 14 20	блогер
+T4	CITY 42 51	Нью-Йорке
+T5	PERSON 52 64	Пэрис Хилтон
+T6	PERSON 83 94	Эзра Уильям
+T7	PROFESSION 102 108	блогер
+T8	ORGANIZATION 109 119	Инстаграма
+T9	PRODUCT 109 119	Инстаграма
+T10	PROFESSION 145 156	миллиардера
+T11	COUNTRY 160 169	Индонезии
+T12	CITY 182 191	Нью-Йорке
+T13	EVENT 209 217	интервью
+T14	COUNTRY 218 229	South China
+T15	ORGANIZATION 218 242	South China Morning Post
+T16	AGE 332 341	29-летний
+T17	PERSON 342 353	Эзра Уильям
+T18	CITY 402 411	Нью-Йорка
+T19	CITY 412 418	Нолита
+T20	PERSON 412 418	Нолита
+T21	PERSON 428 433	Wayan
+T22	COUNTRY 460 473	индонезийской
+T23	NATIONALITY 460 473	индонезийской
+T24	PERSON 496 502	Седрик
+T25	PERSON 505 520	Очи Вонгерихтен
+T26	PROFESSION 548 558	шеф-повара
+T27	PERSON 584 609	Jean-Georges Vongerichten
+T28	EVENT 613 631	Открытие ресторана
+T29	DATE 642 668	в начале февраля 2019 года
+T30	EVENT 678 689	Недели моды
+T31	CITY 692 701	Нью-Йорке
+T32	COUNTRY 714 724	китайского
+T33	DATE 714 736	китайского Нового года
+T34	PERSON 748 755	Уильяма
+T35	NATIONALITY 786 792	китаец
+T36	EVENT 834 851	поднятием бокалов
+T37	PERSON 867 873	Уильям
+T38	CITY 884 892	Джакарте
+T39	FACILITY 952 964	Вест-Виллидж
+T40	CITY 967 977	Манхэттене
+T41	PERSON 989 996	Уильяма
+T42	MONEY 1182 1200	740 тысяч долларов
+T43	NUMBER 1202 1221	примерно в 2600 раз
+T44	PROFESSION 1243 1251	рабочего
+T45	COUNTRY 1254 1263	Индонезии
+T46	CITY 1300 1312	нью-йоркской
+T47	ORGANIZATION 1314 1330	золотой молодёжи
+T48	PERSON 1347 1360	Тиффани Трамп
+T49	COUNTRY 1367 1380	американского
+T50	NATIONALITY 1367 1380	американского
+T51	PROFESSION 1367 1391	американского президента
+T52	PROFESSION 1381 1391	президента
+T53	PERSON 1392 1398	Трампа
+T54	ORDINAL 1405 1411	второй
+T55	PERSON 1417 1429	Марлы Мейплз
+T56	PRODUCT 1440 1450	инстаграме
+T57	PROFESSION 1526 1548	фотомодель-трансгендер
+T58	PERSON 1570 1582	Пэрис Хилтон
+T59	PERSON 1585 1606	Никки Хилтон-Ротшильд
+T60	PROFESSION 1608 1614	модель
+T61	PERSON 1615 1626	Хилари Рода
+T62	PROFESSION 1628 1635	актриса
+T63	PERSON 1636 1647	Эшли Бенсон
+T64	COUNTRY 1681 1688	Америки
+T65	PERSON 1689 1706	Саманта Перельман
+T66	PROFESSION 1708 1714	модель
+T67	PERSON 1715 1730	Виктория Бекхэм
+T68	COUNTRY 1735 1740	Китае
+T69	NATIONALITY 1903 1912	нуворишей
+T70	ORDINAL 1949 1955	втором
+T71	EVENT 1996 2007	реалити-шоу
+T72	DATE 2047 2054	за ночь
+T73	EVENT 2064 2071	свадьба
+T74	MONEY 2075 2090	30 млн долларов
+T75	EVENT 2092 2100	сожжение
+T76	PRODUCT 2150 2161	Apple Watch
+T77	PROFESSION 2163 2174	глава Китая
+T78	COUNTRY 2169 2174	Китая
+T79	PERSON 2175 2186	Си Цзиньпин

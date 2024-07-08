@@ -1,0 +1,79 @@
+T1	CITY 2 10	Солсбери
+T2	EVENT 21 28	концерт
+T3	EVENT 21 49	концерт «Из России с любовью
+T4	EVENT 30 49	Из России с любовью
+T5	COUNTRY 33 39	России
+T6	FACILITY 51 74	Церковь Святого Мартина
+T7	PERSON 59 74	Святого Мартина
+T8	CITY 77 85	Солсбери
+T9	FACILITY 87 106	Church of St Martin
+T10	CITY 108 117	Salisbury
+T11	EVENT 119 126	Концерт
+T12	COUNTRY 145 151	России
+T13	COUNTRY 173 183	британском
+T14	CITY 184 192	Солсбери
+T15	EVENT 203 212	отравлены
+T16	PROFESSION 220 229	полковник
+T17	PROFESSION 220 233	полковник ГРУ
+T18	ORGANIZATION 230 233	ГРУ
+T19	PERSON 234 249	Сергей Скрипаль
+T20	PERSON 261 265	Юлия
+T21	EVENT 269 280	Мероприятие
+T22	DATE 291 311	13 октября 2018 года
+T23	FACILITY 314 336	Церкви Святого Мартина
+T24	ORGANIZATION 314 336	Церкви Святого Мартина
+T25	FACILITY 338 357	Church of St Martin
+T26	CITY 359 368	Salisbury
+T27	NUMBER 372 387	трёх километрах
+T28	PERSON 396 404	Скрипаля
+T29	NUMBER 436 453	нескольких метрах
+T30	EVENT 485 493	концерта
+T31	PROFESSION 494 502	пианисты
+T32	COUNTRY 537 544	русских
+T33	NATIONALITY 537 544	русских
+T34	PROFESSION 545 557	композиторов
+T35	PERSON 569 586	Сергей Рахманинов
+T36	PERSON 588 603	Пётр Чайковский
+T37	PERSON 606 624	Дмитрий Шостакович
+T38	EVENT 649 657	концерта
+T39	PROFESSION 660 675	исполнительница
+T40	PERSON 677 688	Гилл Болтон
+T41	PERSON 690 701	Gill Bolton
+T42	EVENT 717 728	выступление
+T43	DATE 748 764	более года назад
+T44	EVENT 786 798	отравлениями
+T45	CITY 801 809	Солсбери
+T46	EVENT 821 829	концерта
+T47	PERSON 866 878	Яна Флеминга
+T48	PROFESSION 896 902	агента
+T49	PROFESSION 896 906	агента MI6
+T50	ORGANIZATION 903 906	MI6
+T51	PERSON 907 920	Джеймса Бонда
+T52	NATIONALITY 946 955	советским
+T53	PROFESSION 956 963	шпионом
+T54	PERSON 1167 1171	Глин
+T55	PROFESSION 1184 1196	следователей
+T56	PERSON 1198 1207	Скрипалей
+T57	COUNTRY 1210 1224	Великобритании
+T58	EVENT 1225 1260	отравили нервно-паралитическим ядом
+T59	EVENT 1319 1329	отравлении
+T60	PERSON 1330 1339	Скрипалей
+T61	CITY 1340 1346	Лондон
+T62	NATIONALITY 1355 1362	россиян
+T63	PROFESSION 1374 1390	сотрудниками ГРУ
+T64	ORGANIZATION 1387 1390	ГРУ
+T65	PERSON 1422 1436	Руслан Боширов
+T66	PERSON 1439 1455	Александр Петров
+T67	PROFESSION 1463 1473	журналисты
+T68	PERSON 1485 1501	Руслане Боширове
+T69	PROFESSION 1513 1523	полковника
+T70	PROFESSION 1513 1527	полковника ГРУ
+T71	PROFESSION 1513 1540	полковника ГРУ Героя России
+T72	ORGANIZATION 1524 1527	ГРУ
+T73	COUNTRY 1534 1540	России
+T74	PERSON 1541 1570	Анатолия Владимировича Чепигу
+T75	PROFESSION 1574 1583	президент
+T76	PROFESSION 1574 1590	президент России
+T77	COUNTRY 1584 1590	России
+T78	PERSON 1591 1605	Владимир Путин
+T79	PERSON 1613 1621	Скрипаля
