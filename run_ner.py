@@ -217,8 +217,6 @@ def main():
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
 
-    os.environ["WANDB_DISABLED"] = "true"
-
     parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments))
     if sys.argv[-1].endswith(".json"):
         # If we pass only one argument to the script and it's the path to a json file,
@@ -554,7 +552,7 @@ def main():
                 desc="Running tokenizer on train dataset",
             )
 
-            print(train_dataset.data["input_ids"])
+            # print(train_dataset.data["input_ids"])
 
     # Validation preprocessing
     def prepare_validation_features(examples, split: str = "dev"):
