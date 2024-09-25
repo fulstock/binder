@@ -11,6 +11,7 @@ class BinderConfig(PretrainedConfig):
         hidden_dropout_prob=0.1,
         max_span_width=30,
         use_span_width_embedding=False,
+        do_neutral_spans=False,
         linear_size=128,
         init_temperature=0.07,
         start_loss_weight=0.2,
@@ -26,6 +27,7 @@ class BinderConfig(PretrainedConfig):
         self.hidden_dropout_prob=hidden_dropout_prob
         self.max_span_width = max_span_width
         self.use_span_width_embedding = use_span_width_embedding
+        self.do_neutral_spans = do_neutral_spans
         self.linear_size = linear_size
         self.init_temperature = init_temperature
         self.start_loss_weight = start_loss_weight

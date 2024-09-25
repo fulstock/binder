@@ -32,7 +32,7 @@ class BinderDataCollator:
         if self.type_token_type_ids is not None:
             self.type_token_type_ids = torch.tensor(self.type_token_type_ids)
 
-    def __call__(self, features: List) -> Dict[str, Any]:
+    def __call__(self, features: List) -> Dict[str, Any]: # len(features) = batch_size, feature is just one processed sequence with ner annotations
         batch = {}
         batch['input_ids'] = torch.tensor([f['input_ids'] for f in features], dtype=torch.long)
         batch['attention_mask'] = torch.tensor([f['attention_mask'] for f in features], dtype=torch.bool)
@@ -61,17 +61,21 @@ class BinderDataCollator:
 
             ner['start_negative_mask'] =  start_negative_mask
             ner['end_negative_mask'] = end_negative_mask
-            ner['span_negative_mask'] = span_negative_mask
+            ner['span_negative_mask'] = span_negative_mask  
 
             # Collate mention span examples.
             feature_spans = []
             for feature_id, f in enumerate(features):
                 spans = []
+                
                 for ann in f['ner']['annotations']:
+                    # print(ann)
                     type_id, start, end = ann["type_id"], ann["start"], ann["end"]
 
+                    # print(start_negative_mask[feature_id][type_id].detach().clone())
+
                     start_mask = start_negative_mask[feature_id][type_id].detach().clone()
-                    start_mask[start] = 1
+                    start_mask[start] = 1 # mask = 1 if it is non-entity OR this exact entity
 
                     end_mask = end_negative_mask[feature_id][type_id].detach().clone()
                     end_mask[end] = 1
@@ -79,17 +83,20 @@ class BinderDataCollator:
                     span_mask = span_negative_mask[feature_id][type_id].detach().clone()
                     span_mask[start][end] = 1
 
+                    # print(start_mask)
+
                     spans.append(
                         Span(type_id, start, end, start_mask, end_mask, span_mask)
                     )
+
                 feature_spans.append(spans)
 
-            feature_ids = []
+            feature_ids = [] # sequence-in-a-batch ids
             for feature_id, spans in enumerate(feature_spans):
                 feature_ids += [feature_id] * len(spans)
-            span_type_ids = [s.type_id for spans in feature_spans for s in spans]
+            span_type_ids = [s.type_id for spans in feature_spans for s in spans] # just ids of entity classes
 
-            ner["example_indices"] = [feature_ids, span_type_ids]
+            ner["example_indices"] = [feature_ids, span_type_ids] # list of two lists
             # [batch_size]
             ner["example_starts"] = [s.start for spans in feature_spans for s in spans]
             ner["example_ends"] = [s.end for spans in feature_spans for s in spans]

@@ -164,6 +164,9 @@ class DataTrainingArguments:
             "help": "The maximum length of an entity span."
         },
     )
+    do_neutral_spans: bool = field(
+        default=False, metadata={"help": "Produce neutral spans in flat2nested setting."}
+    )
     entity_type_file: str = field(
         default=None,
         metadata={"help": "The entity type file contains all entity type names, descriptions, etc."},
@@ -213,6 +216,8 @@ def main():
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
+
+    os.environ["WANDB_DISABLED"] = "true"
 
     parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments))
     if sys.argv[-1].endswith(".json"):
@@ -312,6 +317,7 @@ def main():
         hidden_dropout_prob=model_args.hidden_dropout_prob,
         max_span_width=data_args.max_seq_length + 1,
         use_span_width_embedding=model_args.use_span_width_embedding,
+        do_neutral_spans=data_args.do_neutral_spans,
         linear_size=model_args.linear_size,
         init_temperature=model_args.init_temperature,
         start_loss_weight=model_args.start_loss_weight,
@@ -455,6 +461,7 @@ def main():
                 for i, s in enumerate(token_start_mask)
             ]
 
+            # These masks are same as token_start, token_end, default_span, but later the word starts, ends and spans that correspond to NER spans are set to zero. So, mask (would be) = 1 if it is start, end, span of a non-entity.
             start_negative_mask = [token_start_mask[:] for _ in entity_type_id_to_str]
             end_negative_mask = [token_end_mask[:] for _ in entity_type_id_to_str]
             span_negative_mask = [[x[:] for x in default_span_mask] for _ in entity_type_id_to_str]
@@ -493,6 +500,17 @@ def main():
                     start_negative_mask[entity_type_id][start_token_index] = 0
                     end_negative_mask[entity_type_id][end_token_index] = 0
                     span_negative_mask[entity_type_id][start_token_index][end_token_index] = 0
+
+                    # ADDED:
+                    if data_args.do_neutral_spans:
+                        for s in range(start_token_index + 1, end_token_index + 1):
+                            start_negative_mask[entity_type_id][s] = 0
+                        for e in range(start_token_index, end_token_index):
+                            end_negative_mask[entity_type_id][e] = 0
+                        for s in range(start_token_index, end_token_index + 1):
+                            for e in range(start_token_index, end_token_index + 1):
+                                span_negative_mask[entity_type_id][s][e] = 0
+                        
 
             # Skip training examples without annotations.
             if len(tokenized_ner_annotations) == 0:
@@ -535,6 +553,8 @@ def main():
                 load_from_cache_file=not data_args.overwrite_cache,
                 desc="Running tokenizer on train dataset",
             )
+
+            print(train_dataset.data["input_ids"])
 
     # Validation preprocessing
     def prepare_validation_features(examples, split: str = "dev"):

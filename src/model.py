@@ -43,6 +43,7 @@ def masked_log_softmax(vector: torch.Tensor, mask: torch.BoolTensor, dim: int = 
     lower), the way we handle masking here could mess you up.  But if you've got logit values that
     extreme, you've got bigger problems than this.
     """
+    # print(vector)
     if mask is not None:
         while mask.dim() < vector.dim():
             mask = mask.unsqueeze(1)
@@ -50,6 +51,14 @@ def masked_log_softmax(vector: torch.Tensor, mask: torch.BoolTensor, dim: int = 
         # results in nans when the whole vector is masked.  We need a very small value instead of a
         # zero in the mask for these cases.
         vector = vector + (mask + tiny_value_of_dtype(vector.dtype)).log()
+        # print(vector)
+
+    # Works like this:
+    # - If masked, zeroes out in softmax, so has no influence on training
+    # - If not, used in training. Two options:
+    # -- Non-entity
+    # -- Exact entity of this type and position
+    # Entity is derived later with given position and adds value to loss. So, all others are considered negative -- in order to enhance softmax value while calculating log_softmax for entity. So, exact entity will be "closer" to entity type vector, while non-entities -- stay out.
     return torch.nn.functional.log_softmax(vector, dim=dim)
 
 
@@ -63,7 +72,7 @@ def contrastive_loss(
     if len(scores.shape) == 3:
         scores = scores.view(batch_size, -1)
         mask = mask.view(batch_size, -1)
-        log_probs = masked_log_softmax(scores, mask)
+        log_probs = masked_log_softmax(scores, mask) 
         log_probs = log_probs.view(batch_size, seq_length, seq_length)
         start_positions, end_positions = positions
         batch_indices = list(range(batch_size))
@@ -71,7 +80,9 @@ def contrastive_loss(
     else:
         log_probs = masked_log_softmax(scores, mask)
         batch_indices = list(range(batch_size))
+        print(log_probs)
         log_probs = log_probs[batch_indices, positions]
+        print(log_probs)
     if prob_mask is not None:
         log_probs = log_probs * prob_mask
     return - log_probs.mean()
@@ -123,6 +134,8 @@ class Binder(PreTrainedModel):
         self.span_loss_weight = config.span_loss_weight
         self.threshold_loss_weight = config.threshold_loss_weight
         self.ner_loss_weight = config.ner_loss_weight
+
+        self.do_neutral_spans = config.do_neutral_spans
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -178,7 +191,7 @@ class Binder(PreTrainedModel):
             return_dict=return_dict,
         )
         # batch_size x seq_length x hidden_size
-        sequence_output = outputs[0]
+        sequence_output = outputs[0] # last hidden state from text_encoder
 
         type_outputs = self.type_encoder(
             type_input_ids.squeeze(0),
@@ -240,22 +253,38 @@ class Binder(PreTrainedModel):
             end_negative_mask = ner["end_negative_mask"].view(batch_size * num_types, seq_length)
             span_negative_mask = ner["span_negative_mask"].view(batch_size * num_types, seq_length, seq_length)
 
-            start_threshold_loss = contrastive_loss(flat_start_scores, 0, start_negative_mask)
-            end_threshold_loss = contrastive_loss(flat_end_scores, 0, end_negative_mask)
-            span_threshold_loss = contrastive_loss(flat_span_scores, (0, 0), span_negative_mask)
+            # print(flat_start_scores)
+            # print(start_negative_mask)
 
-            threshold_loss = (
-                self.start_loss_weight * start_threshold_loss +
-                self.end_loss_weight * end_threshold_loss +
-                self.span_loss_weight * span_threshold_loss
-            )
+            # start_threshold_loss = contrastive_loss(flat_start_scores, 0, start_negative_mask)
+            # end_threshold_loss = contrastive_loss(flat_end_scores, 0, end_negative_mask)
+            # span_threshold_loss = contrastive_loss(flat_span_scores, (0, 0), span_negative_mask)
 
-            ner_indices = ner["example_indices"]
-            ner_starts, ner_ends = ner["example_starts"], ner["example_ends"]
+            # threshold_loss = (
+            #     self.start_loss_weight * start_threshold_loss +
+            #     self.end_loss_weight * end_threshold_loss +
+            #     self.span_loss_weight * span_threshold_loss
+            # )
+
+            ner_indices = ner["example_indices"] # unzipped list of (in-batch-sequence-id, entity-type-id), which gives us only one list (from B x C x S to just S) (sequence of processed words) of len seq_len
+            ner_starts, ner_ends = ner["example_starts"], ner["example_ends"] # poses of start and end in such sequence
             ner_start_masks, ner_end_masks = ner["example_start_masks"], ner["example_end_masks"]
             ner_span_masks = ner["example_span_masks"]
 
+            # print(start_scores)
+            # print(ner_indices)
+            # print(ner_starts)
+            # print(ner_start_masks)
+
+            # print(ner_start_masks[0] == ner_start_masks[1])
+
+            print(start_scores[ner_indices])
+            print(ner_starts)
+            print(ner_start_masks)
+
             start_loss = contrastive_loss(start_scores[ner_indices], ner_starts, ner_start_masks)
+            # exit(0)
+
             end_loss = contrastive_loss(end_scores[ner_indices], ner_ends, ner_end_masks)
             span_loss = contrastive_loss(span_scores[ner_indices], (ner_starts, ner_ends), ner_span_masks)
 
@@ -265,7 +294,7 @@ class Binder(PreTrainedModel):
                 self.span_loss_weight * span_loss
             )
 
-            total_loss = self.ner_loss_weight * total_loss + self.threshold_loss_weight * threshold_loss
+            # total_loss = self.ner_loss_weight * total_loss + self.threshold_loss_weight * threshold_loss
 
         if not return_dict:
             output = (start_scores, end_scores, span_scores) + outputs[2:]
