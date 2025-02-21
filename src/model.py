@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import numpy as np
 from transformers import PreTrainedModel, AutoModel, AutoConfig
 from transformers.file_utils import ModelOutput
+from .config import BinderConfig
 
 
 def tiny_value_of_dtype(dtype: torch.dtype):
@@ -81,6 +82,7 @@ def contrastive_loss(
 class BinderModelOutput(ModelOutput):
 
     loss: Optional[torch.FloatTensor] = None
+    input_ids: torch.LongTensor = None
     start_scores: torch.FloatTensor = None
     end_scores: torch.FloatTensor = None
     span_scores: torch.FloatTensor = None
@@ -180,12 +182,30 @@ class Binder(PreTrainedModel):
         # batch_size x seq_length x hidden_size
         sequence_output = outputs[0]
 
+        # print(type_input_ids)
+        # print(type_input_ids.squeeze(0))
+        # print(type_attention_mask)
+        # print(type_attention_mask.squeeze(0))
+        # if type_token_type_ids:
+        #     print(type_token_type_ids)
+        #     print(type_token_type_ids.squeeze(0))
+        # print(return_dict)
+
+        # type_outputs = self.type_encoder(
+        #     type_input_ids.squeeze(0),
+        #     attention_mask=type_attention_mask.squeeze(0),
+        #     token_type_ids=type_token_type_ids.squeeze(0) if type_token_type_ids is not None else None,
+        #     return_dict=return_dict,
+        # )
+
         type_outputs = self.type_encoder(
-            type_input_ids.squeeze(0),
-            attention_mask=type_attention_mask.squeeze(0),
-            token_type_ids=type_token_type_ids.squeeze(0) if type_token_type_ids is not None else None,
+            type_input_ids,
+            attention_mask=type_attention_mask,
+            token_type_ids=type_token_type_ids if type_token_type_ids is not None else None,
             return_dict=return_dict,
         )
+
+        # exit(1)
         # num_types x hidden_size
         type_output = type_outputs[0][:, 0]
 
@@ -214,7 +234,12 @@ class Binder(PreTrainedModel):
 
         # span_width_embeddings
         if self.width_embeddings is not None:
-            range_vector = torch.cuda.LongTensor(seq_length, device=sequence_output.device).fill_(1).cumsum(0) - 1
+            print(sequence_output.device)
+            if "cuda" in str(sequence_output.device):
+                range_vector = torch.cuda.LongTensor(seq_length, device=sequence_output.device).fill_(1).cumsum(0) - 1
+            else:
+                range_vector = torch.LongTensor(seq_length, device=sequence_output.device).fill_(1).cumsum(0) - 1
+            
             span_width = range_vector.unsqueeze(0) - range_vector.unsqueeze(1) + 1
             # seq_length x seq_length x hidden_size
             span_width_embeddings = self.width_embeddings(span_width * (span_width > 0))
@@ -273,6 +298,7 @@ class Binder(PreTrainedModel):
 
         return BinderModelOutput(
             loss=total_loss,
+            input_ids=input_ids,
             start_scores=start_scores,
             end_scores=end_scores,
             span_scores=span_scores,

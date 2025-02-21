@@ -33,6 +33,11 @@ class BinderDataCollator:
             self.type_token_type_ids = torch.tensor(self.type_token_type_ids)
 
     def __call__(self, features: List) -> Dict[str, Any]:
+
+        # print([len(f['input_ids']) for f in features])
+
+        # exit(0)
+
         batch = {}
         batch['input_ids'] = torch.tensor([f['input_ids'] for f in features], dtype=torch.long)
         batch['attention_mask'] = torch.tensor([f['attention_mask'] for f in features], dtype=torch.bool)
@@ -138,6 +143,10 @@ class BinderTrainer(Trainer):
             ignore_keys=ignore_keys,
         )
 
+        # print(output)
+
+        # exit(0)
+
         predictions = self.post_process_function(eval_examples, eval_dataset, output.predictions)
         metrics = predictions["metrics"]
 
@@ -163,6 +172,10 @@ class BinderTrainer(Trainer):
             ignore_keys=ignore_keys,
         )
 
+        # print(output)
+
+        # exit(0)
+
         predictions = self.post_process_function(predict_examples, predict_dataset, output.predictions, "predict")
         metrics = predictions["metrics"]
 
@@ -174,3 +187,4 @@ class BinderTrainer(Trainer):
         self.log(metrics)
 
         return PredictionOutput(predictions=predictions["predictions"], label_ids=predictions["labels"], metrics=metrics)
+

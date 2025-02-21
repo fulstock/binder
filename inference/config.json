@@ -1,0 +1,22 @@
+{
+  "architectures": [
+    "Binder"
+  ],
+  "cache_dir": null,
+  "do_neutral_spans": false,
+  "end_loss_weight": 0.2,
+  "hidden_dropout_prob": 0.1,
+  "init_temperature": 0.07,
+  "linear_size": 128,
+  "max_span_width": 193,
+  "ner_loss_weight": 0.5,
+  "pretrained_model_name_or_path": "DeepPavlov/rubert-base-cased",
+  "revision": "main",
+  "span_loss_weight": 0.6,
+  "start_loss_weight": 0.2,
+  "threshold_loss_weight": 0.5,
+  "torch_dtype": "float32",
+  "transformers_version": "4.24.0",
+  "use_auth_token": null,
+  "use_span_width_embedding": true
+}

@@ -45,6 +45,18 @@ def compute_precision_recall_f1(tp: int, fn: int, fp: int, **kwargs) -> Dict[str
     f1 = 2 * tp / (2 * tp + fp + fn)
     return {"precision": precision, "recall": recall, "f1": f1}
 
+def compute_everything(tp: int, fn: int, fp: int, **kwargs) -> Dict[str, float]:
+    if tp + fp + fn == 0:
+        return {"tp" : float(tp), "fp" : float(fp), "fn" : float(fn), "precision": .0, "recall": .0, "f1": .0}
+    if tp + fp == 0:
+        return {"tp" : float(tp), "fp" : float(fp), "fn" : float(fn), "precision": .0, "recall": .0, "f1": .0}
+    if tp + fn == 0:
+        return {"tp" : float(tp), "fp" : float(fp), "fn" : float(fn), "precision": .0, "recall": .0, "f1": .0}
+    precision = tp / (tp + fp)
+    recall = tp / (tp + fn)
+    f1 = 2 * tp / (2 * tp + fp + fn)
+    return {"tp" : float(tp), "fp" : float(fp), "fn" : float(fn), "precision": precision, "recall": recall, "f1": f1}
+
 
 def postprocess_nested_predictions(
     examples,
@@ -55,17 +67,34 @@ def postprocess_nested_predictions(
     output_dir: Optional[str] = None,
     prefix: Optional[str] = None,
     log_level: Optional[int] = logging.WARNING,
+    neutral_relative_threshold: Optional[float] = 0.5,
     tokenizer = None,
     **kwargs,
 ) -> Dict:
     logger.setLevel(log_level)
 
-    if len(predictions) != 3:
-        raise ValueError("`predictions` should be a tuple with three elements (start_logits, end_logits, span_logits).")
-    all_start_logits, all_end_logits, all_span_logits = predictions
+    # examples -- datasets.Dataset (комменты для val случая)
 
-    if len(predictions[0]) != len(features):
-        raise ValueError(f"Got {len(predictions[0])} predictions and {len(features)} features.")
+    # print(examples.column_names)
+    # ['text', 'entity_types', 'entity_start_chars', 'entity_end_chars', 'id', 'word_start_chars', 'word_end_chars']
+    # print(examples)
+    # Dataset({
+    #     features: ['text', 'entity_types', 'entity_start_chars', 'entity_end_chars', 'id', 'word_start_chars', 'word_end_chars'],
+    #     num_rows: 10
+    # })
+    # print(features[0].keys())
+    # dict_keys(['input_ids', 'token_type_ids', 'attention_mask', 'offset_mapping', 'split', 'example_id', 'token_start_mask', 'token_end_mask'])
+    # print(features[0])
+    # {'input_ids': [101, 34422, 14266, 102], 'token_type_ids': [0, 0, 0, 0], 'attention_mask': [1, 1, 1, 1], 'offset_mapping': [None, [0, 4], [6, 10], None], 'split': 'dev', 'example_id': '24115799_ru', 'token_start_mask': [0, 1, 1, 0], 'token_end_mask': [0, 1, 0, 0]}
+
+    # exit(1)
+
+    if len(predictions) != 4:
+        raise ValueError("`predictions` should be a tuple with three elements (input_ids, start_logits, end_logits, span_logits).")
+    all_input_ids, all_start_logits, all_end_logits, all_span_logits = predictions
+
+    if len(predictions[1]) != len(features):
+        raise ValueError(f"Got {len(predictions[1])} predictions and {len(features)} features.")
 
     # Build a map example to its corresponding features.
     example_id_to_index = {k: i for i, k in enumerate(examples["id"])}
@@ -78,20 +107,31 @@ def postprocess_nested_predictions(
     # The dictionaries we have to fill.
     all_predictions = set()
 
+    all_neutral_predictions = set()
+
+    all_nonzero_predictions = set()
+
     entity_type_vocab = list(set(id_to_type))
     entity_type_count = collections.defaultdict(int)
     metrics_by_type = {entity_type: {"tp": 0, "fn": 0, "fp": 0} for entity_type in entity_type_vocab + ["all"]}
     start_metrics_by_type = {entity_type: {"tp": 0, "fn": 0, "fp": 0} for entity_type in entity_type_vocab + ["all"]}
     end_metrics_by_type = {entity_type: {"tp": 0, "fn": 0, "fp": 0} for entity_type in entity_type_vocab + ["all"]}
 
+    ner_logits = collections.defaultdict(float)
+    neu_logits = collections.defaultdict(float)
+    all_logits = collections.defaultdict(float)
+
     # Logging.
     logger.info(f"Post-processing {len(examples)} example predictions split into {len(features)} features.")
 
     # Let's loop over all the examples!
+
     for example_index, example in enumerate(examples):
         example_annotations = set()
         example_predictions = set()
-
+        neutral_predictions = set()
+        nonzero_predictions = set()
+        
         # Looping through all NER annotations.
         for entity_type, start_char, end_char in zip(
             example["entity_types"], example["entity_start_chars"], example["entity_end_chars"]):
@@ -105,31 +145,56 @@ def postprocess_nested_predictions(
                 text=example["text"][start_char:end_char]
             ))
 
+        
         # Those are the indices of the features associated to the current example.
         feature_indices = features_per_example[example_index]
 
         # Looping through all the features associated to the current example.
+
         for feature_index in feature_indices:
             # We grab the masks for start and end indices.
+
             token_start_mask = np.array(features[feature_index]["token_start_mask"]).astype(bool)
             token_end_mask = np.array(features[feature_index]["token_end_mask"]).astype(bool)
 
             # We grab the predictions of the model for this feature.
             span_logits = all_span_logits[feature_index]
-            # We use the [CLS] logits as thresholds
+
+            ### Two thresholds for flat2nested. Upper and lower one. Upper: positive vs others, lower: neutral vs negative. 
+
+            ### Upper threshold is [CLS] logits as below
+            # We use the [CLS] logits as thresholds --- 
             span_preds = np.triu(span_logits > span_logits[:, 0:1, 0:1])
+
+            ### Lower threshold 
+            span_neutrals = np.triu(span_logits > span_logits[:, 0:1, 0:1] * neutral_relative_threshold)#  & span_logits <= span_logits[:, 0:1, 0:1])
+
+            span_all = np.triu(span_logits > 0)
 
             type_ids, start_indexes, end_indexes = (
                 token_start_mask[np.newaxis, :, np.newaxis] & token_end_mask[np.newaxis, np.newaxis, :] & span_preds
+            ).nonzero()
+
+            neutral_type_ids, neutral_start_indexes, neutral_end_indexes = (
+                token_start_mask[np.newaxis, :, np.newaxis] & token_end_mask[np.newaxis, np.newaxis, :] & span_neutrals
+            ).nonzero()
+            # neutral_data = (example["id"], span_neutrals)
+
+            all_type_ids, all_start_indexes, all_end_indexes = (
+                token_start_mask[np.newaxis, :, np.newaxis] & token_end_mask[np.newaxis, np.newaxis, :] & span_all
             ).nonzero()
 
             # This is what will allow us to map some the positions in our logits to span of texts in the original context.
             offset_mapping = features[feature_index]["offset_mapping"]
 
             # Go through all start and end indices.
+
+
             for type_id, start_index, end_index in zip(type_ids, start_indexes, end_indexes):
                 # Don't consider out-of-scope answers, either because the indices are out of bounds or correspond
                 # to part of the input_ids that are not in the context.
+
+
                 if (
                     start_index >= len(offset_mapping)
                     or end_index >= len(offset_mapping)
@@ -149,47 +214,143 @@ def postprocess_nested_predictions(
                     end_char=end_char,
                     text=example["text"][start_char:end_char],
                 )
+                if id_to_type[type_id] not in ner_logits.keys():
+                    ner_logits[id_to_type[type_id]] = collections.defaultdict(float)
+                    ner_logits[id_to_type[type_id]][start_char] = collections.defaultdict(float)
+                    ner_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
+                elif start_char not in ner_logits[id_to_type[type_id]].keys():
+                    ner_logits[id_to_type[type_id]][start_char] = collections.defaultdict(float)
+                    ner_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
+                elif end_char not in ner_logits[id_to_type[type_id]][start_char].keys():
+                    ner_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
+                ner_logits[id_to_type[type_id]][start_char][end_char] = float(span_logits[type_id][start_index][end_index])
                 example_predictions.add(pred)
 
+
+            for type_id, start_index, end_index in zip(neutral_type_ids, neutral_start_indexes, neutral_end_indexes):
+                # Don't consider out-of-scope answers, either because the indices are out of bounds or correspond
+                # to part of the input_ids that are not in the context.
+
+                if (
+                    start_index >= len(offset_mapping)
+                    or end_index >= len(offset_mapping)
+                    or offset_mapping[start_index] is None
+                    or offset_mapping[end_index] is None
+                ):
+                    continue
+                # Don't consider spans with a length that is > max_span_length.
+                if end_index - start_index + 1 > max_span_length:
+                    continue
+                # A prediction contains (example_id, entity_type, start_index, end_index)
+                start_char, end_char = offset_mapping[start_index][0], offset_mapping[end_index][1]
+                pred = Annotation(
+                    id=example["id"],
+                    entity_type=id_to_type[type_id],
+                    start_char=start_char,
+                    end_char=end_char,
+                    text=example["text"][start_char:end_char]
+                )
+                if id_to_type[type_id] not in neu_logits.keys():
+                    neu_logits[id_to_type[type_id]] = collections.defaultdict(float)
+                    neu_logits[id_to_type[type_id]][start_char] = collections.defaultdict(float)
+                    neu_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
+                elif start_char not in neu_logits[id_to_type[type_id]].keys():
+                    neu_logits[id_to_type[type_id]][start_char] = collections.defaultdict(float)
+                    neu_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
+                elif end_char not in neu_logits[id_to_type[type_id]][start_char].keys():
+                    neu_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
+                neu_logits[id_to_type[type_id]][start_char][end_char] = float(span_logits[type_id][start_index][end_index])
+                neutral_predictions.add(pred)
+                
+            for type_id, start_index, end_index in zip(all_type_ids, all_start_indexes, all_end_indexes):
+                # Don't consider out-of-scope answers, either because the indices are out of bounds or correspond
+                # to part of the input_ids that are not in the context.
+
+                if (
+                    start_index >= len(offset_mapping)
+                    or end_index >= len(offset_mapping)
+                    or offset_mapping[start_index] is None
+                    or offset_mapping[end_index] is None
+                ):
+                    continue
+                # Don't consider spans with a length that is > max_span_length.
+                if end_index - start_index + 1 > max_span_length:
+                    continue
+                # A prediction contains (example_id, entity_type, start_index, end_index)
+                start_char, end_char = offset_mapping[start_index][0], offset_mapping[end_index][1]
+                pred = Annotation(
+                    id=example["id"],
+                    entity_type=id_to_type[type_id],
+                    start_char=start_char,
+                    end_char=end_char,
+                    text=example["text"][start_char:end_char],
+                )
+                if id_to_type[type_id] not in all_logits.keys():
+                    all_logits[id_to_type[type_id]] = collections.defaultdict(float)
+                    all_logits[id_to_type[type_id]][start_char] = collections.defaultdict(float)
+                    all_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
+                elif start_char not in all_logits[id_to_type[type_id]].keys():
+                    all_logits[id_to_type[type_id]][start_char] = collections.defaultdict(float)
+                    all_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
+                elif end_char not in all_logits[id_to_type[type_id]][start_char].keys():
+                    all_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
+                all_logits[id_to_type[type_id]][start_char][end_char] = float(span_logits[type_id][start_index][end_index])
+                nonzero_predictions.add(pred)
+
+
         for t in metrics_by_type.keys():
+
+            
             for k, v in compute_tp_fn_fp(
                 example_predictions if t == "all" else set(filter(lambda x: x.entity_type == t, example_predictions)),
                 example_annotations if t == "all" else set(filter(lambda x: x.entity_type == t, example_annotations)),
             ).items():
                 metrics_by_type[t][k] += v
+            
+     
 
         all_annotations.update(example_annotations)
         all_predictions.update(example_predictions)
-
+        all_neutral_predictions.update(neutral_predictions)
+        all_nonzero_predictions.update(nonzero_predictions)
+            
         example_gold_starts = set((x.entity_type, x.start_char) for x in example_annotations)
         example_pred_starts = set((x.entity_type, x.start_char) for x in example_predictions)
+
         for t in start_metrics_by_type.keys():
+            
+            
             for k, v in compute_tp_fn_fp(
                 example_pred_starts if t == "all" else set(filter(lambda x: x[0] == t, example_pred_starts)),
                 example_gold_starts if t == "all" else set(filter(lambda x: x[0] == t, example_gold_starts)),
             ).items():
                 start_metrics_by_type[t][k] += v
+            
+       
 
         example_gold_ends = set((x.entity_type, x.end_char) for x in example_annotations)
         example_pred_ends = set((x.entity_type, x.end_char) for x in example_predictions)
+
+       
         for t in end_metrics_by_type.keys():
+            
             for k, v in compute_tp_fn_fp(
                 example_pred_ends if t == "all" else set(filter(lambda x: x[0] == t, example_pred_ends)),
                 example_gold_ends if t == "all" else set(filter(lambda x: x[0] == t, example_gold_ends)),
             ).items():
                 end_metrics_by_type[t][k] += v
+           
+
+
 
     metrics = collections.OrderedDict()
-    precisions, recalls = [], []
+
     sorted_entity_types = ["all"] + sorted(entity_type_vocab, key=lambda x: entity_type_count[x], reverse=True)
     for x, x_metrics_by_type in {"span": metrics_by_type, "start": start_metrics_by_type, "end": end_metrics_by_type}.items():
         metrics[x] = {}
         for t in sorted_entity_types:
-            metrics_for_t = compute_precision_recall_f1(**x_metrics_by_type[t])
-            f1, precision, recall = metrics_for_t["f1"], metrics_for_t["precision"], metrics_for_t["recall"]
-            if x == "span" and t != "all":
-                precisions.append(precision)
-                recalls.append(recall)
+            metrics_for_t = compute_everything(**x_metrics_by_type[t])
+            # print(metrics_for_t)
             metrics[x][t] = {}
             for k, v in metrics_for_t.items():
                 metrics[x][t][k] = v
@@ -206,13 +367,45 @@ def postprocess_nested_predictions(
         if not os.path.isdir(output_dir):
             raise EnvironmentError(f"{output_dir} is not a directory.")
 
+        ner_pred_thresholds = list(span_logits[:, 0:1, 0:1])
+        neu_pred_thresholds = list(span_logits[:, 0:1, 0:1] * neutral_relative_threshold)
+
+        logits_file = os.path.join(
+            output_dir, "thresholds.json"
+        )
+
+        logger.info(f"Saving thresholds to {logits_file}.")
+        with open(logits_file, "w") as writer:
+            outdict = {}
+            outdict["ner"] = dict().copy()
+            outdict["neu"] = dict().copy()
+            for type_id, threshold in enumerate(ner_pred_thresholds):
+                outdict["ner"][id_to_type[type_id]] = float(threshold)
+            for type_id, threshold in enumerate(neu_pred_thresholds):
+                outdict["neu"][id_to_type[type_id]] = float(threshold)
+            json.dump(outdict, writer, ensure_ascii = False, indent = 2)
+
         # Convert flat predictions to hierarchical.
         example_id_to_predictions = {}
         for pred in all_predictions:
             example_id = pred.id
             if example_id not in example_id_to_predictions:
                 example_id_to_predictions[example_id] = set()
-            example_id_to_predictions[example_id].add((pred.start_char, pred.end_char, pred.entity_type, pred.text))
+            example_id_to_predictions[example_id].add((pred.start_char, pred.end_char, pred.entity_type, pred.text, ner_logits[pred.entity_type][pred.start_char][pred.end_char]))
+
+        example_id_to_neutral_predictions = {}
+        for neut in all_neutral_predictions:
+            example_id = neut.id
+            if example_id not in example_id_to_neutral_predictions:
+                example_id_to_neutral_predictions[example_id] = set()
+            example_id_to_neutral_predictions[example_id].add((neut.start_char, neut.end_char, neut.entity_type, neut.text, neu_logits[neut.entity_type][neut.start_char][neut.end_char]))
+
+        example_id_to_all_predictions = {}
+        for nonzero in all_nonzero_predictions:
+            example_id = nonzero.id
+            if example_id not in example_id_to_all_predictions:
+                example_id_to_all_predictions[example_id] = set()
+            example_id_to_all_predictions[example_id].add((nonzero.start_char, nonzero.end_char, nonzero.entity_type, nonzero.text, all_logits[nonzero.entity_type][nonzero.start_char][nonzero.end_char]))
 
         predictions_to_save = []
         for example in examples:
@@ -230,7 +423,7 @@ def postprocess_nested_predictions(
             pred_ner = example_id_to_predictions.get(example["id"], set())
             example["gold_ner"] = sorted(gold_ner)
             example["pred_ner"] = sorted(pred_ner)
-            predictions_to_save.append(example)
+            predictions_to_save.append(example)        
 
         prediction_file = os.path.join(
             output_dir, "predictions.json" if prefix is None else f"{prefix}_predictions.json"
@@ -239,7 +432,62 @@ def postprocess_nested_predictions(
         logger.info(f"Saving predictions to {prediction_file}.")
         with open(prediction_file, "w") as writer:
             for pred in predictions_to_save:
-                writer.write(json.dumps(pred) + "\n")
+                writer.write(json.dumps(pred, ensure_ascii = False) + "\n")
+
+        neutrals_to_save = []
+        for example in examples:
+            example = copy.deepcopy(example)
+            example.pop("word_start_chars")
+            example.pop("word_end_chars")
+            gold_ner = set()
+            for entity_type, start_char, end_char in zip(
+                example["entity_types"], example["entity_start_chars"], example["entity_end_chars"]):
+                gold_ner.add((start_char, end_char, entity_type, example["text"][start_char:end_char]))
+            example.pop("entity_types")
+            example.pop("entity_start_chars")
+            example.pop("entity_end_chars")
+
+            pred_ner = example_id_to_neutral_predictions.get(example["id"], set())
+            example["gold_ner"] = sorted(gold_ner)
+            example["pred_ner"] = sorted(pred_ner)
+            neutrals_to_save.append(example)
+
+        neutrals_file = os.path.join(
+            output_dir, "neutrals.json" if prefix is None else f"{prefix}_neutrals.json"
+        )
+
+        logger.info(f"Saving neutrals to {neutrals_file}.")
+
+        with open(neutrals_file, "w") as writer:
+            for neut in neutrals_to_save:
+                writer.write(json.dumps(neut, ensure_ascii = False) + "\n")
+
+        logits_to_save = []
+        for example in examples:
+            example = copy.deepcopy(example)
+            example.pop("word_start_chars")
+            example.pop("word_end_chars")
+            gold_ner = set()
+            for entity_type, start_char, end_char in zip(
+                example["entity_types"], example["entity_start_chars"], example["entity_end_chars"]):
+                gold_ner.add((start_char, end_char, entity_type, example["text"][start_char:end_char]))
+            example.pop("entity_types")
+            example.pop("entity_start_chars")
+            example.pop("entity_end_chars")
+
+            pred_ner = example_id_to_all_predictions.get(example["id"], set())
+            example["gold_ner"] = sorted(gold_ner)
+            example["pred_ner"] = sorted(pred_ner)
+            logits_to_save.append(example)        
+
+        all_logits_file = os.path.join(
+            output_dir, "all_logits.json" if prefix is None else f"{prefix}_all_logits.json"
+        )
+
+        logger.info(f"Saving all logits to {all_logits_file}.")
+        with open(all_logits_file, "w") as writer:
+            for logit in logits_to_save:
+                writer.write(json.dumps(logit, ensure_ascii = False) + "\n")
 
         metric_file = os.path.join(
             output_dir, "metrics.json" if prefix is None else f"{prefix}_metrics.json"
@@ -249,11 +497,34 @@ def postprocess_nested_predictions(
         with open(metric_file, "a") as writer:
             writer.write(json.dumps(metrics) + "\n")
 
-    metrics = {
-        "f1": metrics["span"]["all"]["f1"],
-        "precision": metrics["span"]["all"]["precision"],
-        "recall": metrics["span"]["all"]["recall"]
-    }
+    reduced_metrics = dict()
+
+    for tag in metrics["span"].keys():
+        if tag != 'all':
+            reduced_metrics[tag + "-f1"] = metrics["span"][tag]["f1"]
+            reduced_metrics[tag + "-recall"] = metrics["span"][tag]["recall"]
+            reduced_metrics[tag + "-precision"] = metrics["span"][tag]["precision"]
+            reduced_metrics[tag + "-tp"] = metrics["span"][tag]["tp"]
+            reduced_metrics[tag + "-fp"] = metrics["span"][tag]["fp"]
+            reduced_metrics[tag + "-fn"] = metrics["span"][tag]["fn"]
+
+    reduced_metrics["macro-f1"] = reduced_metrics["f1"] = np.mean([v for k, v in reduced_metrics.items() if "f1" in k])
+    reduced_metrics["macro-precision"] = reduced_metrics["precision"] = np.mean([v for k, v in reduced_metrics.items() if "precision" in k])
+    reduced_metrics["macro-recall"] = reduced_metrics["recall"] = np.mean([v for k, v in reduced_metrics.items() if "recall" in k])
+
+
+
+    total_tp = sum([v for k, v in reduced_metrics.items() if "-tp" in k])
+    total_fp = sum([v for k, v in reduced_metrics.items() if "-fp" in k])
+    total_fn = sum([v for k, v in reduced_metrics.items() if "-fn" in k])
+
+    prf = compute_precision_recall_f1(int(total_tp), int(total_fn), int(total_fp))
+
+    reduced_metrics["micro-precision"] = prf["precision"]
+    reduced_metrics["micro-recall"] = prf["recall"]
+    reduced_metrics["micro-f1"] = prf["f1"] 
+
+    metrics = reduced_metrics
 
     return {
         "predictions": all_predictions,
@@ -359,225 +630,3 @@ def error_analysis(annotations: Set[Annotation], predictions: Set[Annotation], e
             }
         })
     return ret
-
-
-def postprocess_flat_predictions(
-    examples,
-    features,
-    predictions: Tuple[np.ndarray, np.ndarray, np.ndarray],
-    id_to_type: List[str],
-    max_span_length: int = 30,
-    output_dir: Optional[str] = None,
-    prefix: Optional[str] = None,
-    log_level: Optional[int] = logging.WARNING,
-    tokenizer = None,
-    **kwargs,
-) -> Dict:
-    logger.setLevel(log_level)
-
-    if len(predictions) != 3:
-        raise ValueError("`predictions` should be a tuple with three elements (start_logits, end_logits, span_logits).")
-    all_start_logits, all_end_logits, all_span_logits = predictions
-
-    if len(predictions[0]) != len(features):
-        raise ValueError(f"Got {len(predictions[0])} predictions and {len(features)} features.")
-
-    # Build a map example to its corresponding features.
-    example_id_to_index = {k: i for i, k in enumerate(examples["id"])}
-    features_per_example = collections.defaultdict(list)
-    for i, feature in enumerate(features):
-        features_per_example[example_id_to_index[feature["example_id"]]].append(i)
-
-    # The gold annotations.
-    all_annotations = set()
-    # The dictionaries we have to fill.
-    all_predictions = set()
-
-    entity_type_vocab = list(set(id_to_type))
-    entity_type_count = collections.defaultdict(int)
-    metrics_by_type = {entity_type: {"tp": 0, "fn": 0, "fp": 0} for entity_type in entity_type_vocab + ["all"]}
-    start_metrics_by_type = {entity_type: {"tp": 0, "fn": 0, "fp": 0} for entity_type in entity_type_vocab + ["all"]}
-    end_metrics_by_type = {entity_type: {"tp": 0, "fn": 0, "fp": 0} for entity_type in entity_type_vocab + ["all"]}
-
-    # Logging.
-    logger.info(f"Post-processing {len(examples)} example predictions split into {len(features)} features.")
-
-    # Let's loop over all the examples!
-    for example_index, example in enumerate(examples):
-        example_annotations = set()
-        example_pred_scores = {}
-
-        # Looping through all NER annotations.
-        for entity_type, start_char, end_char in zip(
-            example["entity_types"], example["entity_start_chars"], example["entity_end_chars"]):
-            entity_type_count["all"] += 1
-            entity_type_count[entity_type] += 1
-            example_annotations.add(Annotation(
-                id=example["id"],
-                entity_type=entity_type,
-                start_char=start_char,
-                end_char=end_char,
-                text=example["text"][start_char:end_char]
-            ))
-
-        # Those are the indices of the features associated to the current example.
-        feature_indices = features_per_example[example_index]
-
-        # Looping through all the features associated to the current example.
-        for feature_index in feature_indices:
-            # We grab the masks for start and end indices.
-            token_start_mask = np.array(features[feature_index]["token_start_mask"]).astype(bool)
-            token_end_mask = np.array(features[feature_index]["token_end_mask"]).astype(bool)
-
-            # We grab the predictions of the model for this feature.
-            span_logits = all_span_logits[feature_index]
-            # We use the [CLS] logits as thresholds
-            span_preds = np.triu(span_logits > span_logits[:, 0:1, 0:1])
-
-            type_ids, start_indexes, end_indexes = (
-                token_start_mask[np.newaxis, :, np.newaxis] & token_end_mask[np.newaxis, np.newaxis, :] & span_preds
-            ).nonzero()
-
-            # This is what will allow us to map some the positions in our logits to span of texts in the original context.
-            offset_mapping = features[feature_index]["offset_mapping"]
-
-            # Go through all start and end indices.
-            for type_id, start_index, end_index in zip(type_ids, start_indexes, end_indexes):
-                # Don't consider out-of-scope answers, either because the indices are out of bounds or correspond
-                # to part of the input_ids that are not in the context.
-                if (
-                    start_index >= len(offset_mapping)
-                    or end_index >= len(offset_mapping)
-                    or offset_mapping[start_index] is None
-                    or offset_mapping[end_index] is None
-                ):
-                    continue
-                # Don't consider spans with a length that is > max_span_length.
-                if end_index - start_index + 1 > max_span_length:
-                    continue
-                # A prediction contains (example_id, entity_type, start_index, end_index)
-                start_char, end_char = offset_mapping[start_index][0], offset_mapping[end_index][1]
-                pred = Annotation(
-                    id=example["id"],
-                    entity_type=id_to_type[type_id],
-                    start_char=start_char,
-                    end_char=end_char,
-                    text=example["text"][start_char:end_char],
-                )
-                if pred in example_pred_scores:
-                    example_pred_scores[pred] = max(example_pred_scores[pred], span_logits[type_id][start_index][end_index])
-                else:
-                    example_pred_scores[pred] = span_logits[type_id][start_index][end_index]
-
-        example_predictions = remove_overlaps(example_pred_scores)
-
-        for t in metrics_by_type.keys():
-            for k, v in compute_tp_fn_fp(
-                example_predictions if t == "all" else set(filter(lambda x: x.entity_type == t, example_predictions)),
-                example_annotations if t == "all" else set(filter(lambda x: x.entity_type == t, example_annotations)),
-            ).items():
-                metrics_by_type[t][k] += v
-
-        all_annotations.update(example_annotations)
-        all_predictions.update(example_predictions)
-
-        example_gold_starts = set((x.entity_type, x.start_char) for x in example_annotations)
-        example_pred_starts = set((x.entity_type, x.start_char) for x in example_predictions)
-        for t in start_metrics_by_type.keys():
-            for k, v in compute_tp_fn_fp(
-                example_pred_starts if t == "all" else set(filter(lambda x: x[0] == t, example_pred_starts)),
-                example_gold_starts if t == "all" else set(filter(lambda x: x[0] == t, example_gold_starts)),
-            ).items():
-                start_metrics_by_type[t][k] += v
-
-        example_gold_ends = set((x.entity_type, x.end_char) for x in example_annotations)
-        example_pred_ends = set((x.entity_type, x.end_char) for x in example_predictions)
-        for t in end_metrics_by_type.keys():
-            for k, v in compute_tp_fn_fp(
-                example_pred_ends if t == "all" else set(filter(lambda x: x[0] == t, example_pred_ends)),
-                example_gold_ends if t == "all" else set(filter(lambda x: x[0] == t, example_gold_ends)),
-            ).items():
-                end_metrics_by_type[t][k] += v
-
-    metrics = collections.OrderedDict()
-    precisions, recalls = [], []
-    sorted_entity_types = ["all"] + sorted(entity_type_vocab, key=lambda x: entity_type_count[x], reverse=True)
-    for x, x_metrics_by_type in {"span": metrics_by_type, "start": start_metrics_by_type, "end": end_metrics_by_type}.items():
-        metrics[x] = {}
-        for t in sorted_entity_types:
-            metrics_for_t = compute_precision_recall_f1(**x_metrics_by_type[t])
-            f1, precision, recall = metrics_for_t["f1"], metrics_for_t["precision"], metrics_for_t["recall"]
-            if x == "span" and t != "all":
-                precisions.append(precision)
-                recalls.append(recall)
-            metrics[x][t] = {}
-            for k, v in metrics_for_t.items():
-                metrics[x][t][k] = v
-
-    for t in sorted_entity_types:
-        support = entity_type_count[t]
-        logger.info(f"***** {t} ({support}) *****")
-        for x in metrics:
-            f1, precision, recall = metrics[x][t]["f1"], metrics[x][t]["precision"], metrics[x][t]["recall"]
-            logger.info(f"F1 = {f1:>6.1%}, Precision = {precision:>6.1%}, Recall = {recall:>6.1%} (for {x})")
-
-    # If we have an output_dir, let's save all those dicts.
-    if output_dir is not None:
-        if not os.path.isdir(output_dir):
-            raise EnvironmentError(f"{output_dir} is not a directory.")
-
-        # Convert flat predictions to hierarchical.
-        example_id_to_predictions = {}
-        for pred in all_predictions:
-            example_id = pred.id
-            if example_id not in example_id_to_predictions:
-                example_id_to_predictions[example_id] = set()
-            example_id_to_predictions[example_id].add((pred.start_char, pred.end_char, pred.entity_type, pred.text))
-
-        predictions_to_save = []
-        for example in examples:
-            example = copy.deepcopy(example)
-            example.pop("word_start_chars")
-            example.pop("word_end_chars")
-            gold_ner = set()
-            for entity_type, start_char, end_char in zip(
-                example["entity_types"], example["entity_start_chars"], example["entity_end_chars"]):
-                gold_ner.add((start_char, end_char, entity_type, example["text"][start_char:end_char]))
-            example.pop("entity_types")
-            example.pop("entity_start_chars")
-            example.pop("entity_end_chars")
-
-            pred_ner = example_id_to_predictions.get(example["id"], set())
-            example["gold_ner"] = sorted(gold_ner)
-            example["pred_ner"] = sorted(pred_ner)
-
-            predictions_to_save.append(example)
-
-        prediction_file = os.path.join(
-            output_dir, "predictions.json" if prefix is None else f"{prefix}_predictions.json"
-        )
-
-        logger.info(f"Saving predictions to {prediction_file}.")
-        with open(prediction_file, "w") as writer:
-            for pred in predictions_to_save:
-                writer.write(json.dumps(pred) + "\n")
-
-        metric_file = os.path.join(
-            output_dir, "metrics.json" if prefix is None else f"{prefix}_metrics.json"
-        )
-
-        logger.info(f"Saving metrics to {metric_file}.")
-        with open(metric_file, "a") as writer:
-            writer.write(json.dumps(metrics) + "\n")
-
-    metrics = {
-        "f1": metrics["span"]["all"]["f1"],
-        "precision": metrics["span"]["all"]["precision"],
-        "recall": metrics["span"]["all"]["recall"]
-    }
-
-    return {
-        "predictions": all_predictions,
-        "labels": all_annotations,
-        "metrics": metrics,
-    }
