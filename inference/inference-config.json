@@ -4,7 +4,7 @@
     "dataset_name": "seccol_events_texts_1500_new",
     "model_name_or_path": "DeepPavlov/rubert-base-cased",
     "test_file": "/home/student1/data/seccol/seccol_events_texts_1500_new2-binder-div/test.json",
-    "entity_type_file": "entity_types/keyword.json",
+    "entity_type_file": "entity_types_kw.json",
     "dataset_entity_types": ["ATTACK", "DAMAGE", "DEVICE", "DISCOVER_VULNERABILITY", "FILE", "GPE", "HACKER", "HACKER_GROUP", "INFOSOURCE", "MALWARE", "MONEY", "ORGANIZATION", "PATCH_VULNERABILITY", "PERSON", "PROGRAM_SYSTEM", "PROTECTION", "SPECIALIST", "TIME", "VULNERABILITY", "WEBSITE"],
     "output_dir": "./logs/inference/text2ner-test",
     "max_seq_length": 192,

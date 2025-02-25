@@ -226,6 +226,7 @@ class DataTrainingArguments:
 class CustomTrainingArguments(TrainingArguments):
     def __init__(self, custom_device = 'cuda:0', *args, **kwargs):
         self.custom_device = custom_device
+        self.distributed_state = None
         super(CustomTrainingArguments, self).__init__(*args, **kwargs)
         
     @property
@@ -254,25 +255,15 @@ class CustomTrainingArguments(TrainingArguments):
 
 class BinderInference:
 
-    def __init__(self, model_and_config_path = "./inference", device = "auto"):
+    def __init__(self, model_and_config_path = "./conf/inference/text2ner", device = "auto"):
         os.environ["WANDB_DISABLED"] = "true"
 
-        parser = HfArgumentParser((ModelArguments, DataTrainingArguments, CustomTrainingArguments))
+        parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments))
         model_args, data_args, training_args = parser.parse_json_file(json_file=os.path.abspath(os.path.join(model_and_config_path, "inference-config.json")))
         if device == "cpu":
-            training_args.no_cuda = True
-            training_args.custom_device = 'cpu'
-        elif "cuda" in device:
-            gpus = device.split(',')
-            gpus_numbers = []
-            for gpu in gpus:
-                try:
-                    gpus_numbers.append(str(int(gpu.replace('cuda:',''))))
-                except ValueError:
-                    raise ValueError("Device should be either 'cpu' or 'cuda:N' (N replaced with specific number) or 'cuda:N,cuda:M', etc. to train on several gpus or 'auto' (use all available gpus).")
-            os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-            os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(gpus_numbers)
-            training_args.custom_device = device
+            # training_args.no_cuda = True
+            # training_args.custom_device = 'cpu'
+            training_args.use_cpu = True
 
         self.model_args = model_args
         self.data_args = data_args
@@ -503,6 +494,6 @@ class BinderInference:
 
 if __name__ == "__main__":
     # nltk.download('punkt_tab')
-    inf = BinderInference(device = "cuda:0")
+    inf = BinderInference(device = "caa")
     text = "Критическая уязвимость в офисном пакете Microsoft позволяет неаутентифицированным хакерам выполнять вредоносный код. Уязвимость имеет идентификатор CVE-2024-21413 и появляется при получении email-письма с вредоносной ссылкой на не обновленные версии Outlook."
     print(inf.predict(text))
