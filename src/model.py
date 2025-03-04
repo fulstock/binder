@@ -173,6 +173,8 @@ class Binder(PreTrainedModel):
     ):
         return_dict = return_dict if return_dict is not None else self.hf_config.use_return_dict
 
+        # print(input_ids.shape)
+
         outputs = self.text_encoder(
             input_ids,
             attention_mask=attention_mask,
@@ -234,7 +236,7 @@ class Binder(PreTrainedModel):
 
         # span_width_embeddings
         if self.width_embeddings is not None:
-            print(sequence_output.device)
+            # print(sequence_output.device)
             if "cuda" in str(sequence_output.device):
                 range_vector = torch.cuda.LongTensor(seq_length, device=sequence_output.device).fill_(1).cumsum(0) - 1
             else:

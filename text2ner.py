@@ -264,6 +264,8 @@ class BinderInference:
             # training_args.no_cuda = True
             # training_args.custom_device = 'cpu'
             training_args.use_cpu = True
+        else:
+            training_args.use_cpu = False
 
         self.model_args = model_args
         self.data_args = data_args
@@ -384,7 +386,82 @@ class BinderInference:
             compute_metrics=None,
         )
 
+    def map(self, dataset, function, remove_columns):
+
+        with_indices = False
+        with_rank = False
+        input_columns = None
+        batched = False
+        batch_size = 1000
+        keep_in_memory = False
+        num_proc = 1
+        cache_file_name = None
+        writer_batch_size = 1000
+        features = None
+        disable_nullable = False
+        fn_kwargs = {}
+        suffix_template = "_{rank:05d}_of_{num_proc:05d}"
+        drop_last_batch = False
+        new_fingerprint = None
+        desc = "Running tokenizer on prediction dataset"
+
+        """
+        Apply a function to all the examples in the table (individually or in batches) and update the table.
+        If your function returns a column that already exists, then it overwrites it.
+
+        You can specify whether the function should be batched or not with the `batched` parameter:
+
+        - If batched is `False`, then the function takes 1 example in and should return 1 example.
+          An example is a dictionary, e.g. `{"text": "Hello there !"}`.
+        - If batched is `True` and `batch_size` is 1, then the function takes a batch of 1 example as input and can return a batch with 1 or more examples.
+          A batch is a dictionary, e.g. a batch of 1 example is `{"text": ["Hello there !"]}`.
+        - If batched is `True` and `batch_size` is `n > 1`, then the function takes a batch of `n` examples as input and can return a batch with `n` examples, or with an arbitrary number of examples.
+          Note that the last batch may have less than `n` examples.
+          A batch is a dictionary, e.g. a batch of `n` examples is `{"text": ["Hello there !"] * n}`.
+        """
+
+        if isinstance(remove_columns, str):
+            remove_columns = [remove_columns]
+
+        if remove_columns is not None:
+            missing_columns = set(remove_columns) - set(dataset._data.column_names)
+            if missing_columns:
+                raise ValueError(
+                    f"Column to remove {list(missing_columns)} not in the dataset. Current columns in the dataset: {dataset._data.column_names}"
+                )
+
+        dataset_kwargs = {
+            "shard": dataset,
+            "function": function,
+            "with_indices": with_indices,
+            "with_rank": with_rank,
+            "input_columns": input_columns,
+            "batched": batched,
+            "batch_size": batch_size,
+            "drop_last_batch": drop_last_batch,
+            "remove_columns": remove_columns,
+            "keep_in_memory": keep_in_memory,
+            "writer_batch_size": writer_batch_size,
+            "features": features,
+            "disable_nullable": disable_nullable,
+            "fn_kwargs": fn_kwargs,
+        }
+
+        dataset_kwargs["cache_file_name"] = cache_file_name
+        transformed_dataset = None
+
+        if transformed_dataset is None:
+            for rank, done, content in Dataset._map_single(**dataset_kwargs):
+                if done:
+                    transformed_dataset = content
+
+        assert transformed_dataset is not None, "Failed to retrieve the result from map"
+
+        return transformed_dataset
+
     def _prepare_validation_features(self, examples, split):
+
+        # print(examples)
 
         tokenizer = self.tokenizer
         data_args = self.data_args
@@ -404,43 +481,43 @@ class BinderInference:
 
         # For evaluation, we will need to convert our predictions to spans of the text, so we keep the
         # corresponding example_id and we will store the offset mappings.
-        tokenized_examples["split"] = []
-        tokenized_examples["example_id"] = []
-        tokenized_examples["token_start_mask"] = []
-        tokenized_examples["token_end_mask"] = []
+        tokenized_examples['input_ids'] = tokenized_examples['input_ids'][0]
+        tokenized_examples['attention_mask'] = tokenized_examples['attention_mask'][0]
+        tokenized_examples['token_type_ids'] = tokenized_examples['token_type_ids'][0]
+        tokenized_examples["split"] = "test"
 
-        for i in range(len(tokenized_examples["input_ids"])):
-            tokenized_examples["split"].append(split)
+        # Grab the sequence corresponding to that example (to know what is the text and what are special tokens).
+        sequence_ids = tokenized_examples.sequence_ids(0)
 
-            # Grab the sequence corresponding to that example (to know what is the text and what are special tokens).
-            sequence_ids = tokenized_examples.sequence_ids(i)
+        # One example can give several texts, this is the index of the example containing this text.
+        tokenized_examples["example_id"] = examples["id"]
 
-            # One example can give several texts, this is the index of the example containing this text.
-            sample_index = sample_mapping[i]
-            tokenized_examples["example_id"].append(examples["id"][sample_index])
+        # Create token_start_mask and token_end_mask where mask = 1 if the corresponding token is either a start
+        # or an end of a word in the original dataset.
+        token_start_mask, token_end_mask = [], []
+        word_start_chars = examples["word_start_chars"]
+        word_end_chars = examples["word_end_chars"]
+        for index, (start_char, end_char) in enumerate(tokenized_examples["offset_mapping"][0]):
+            if sequence_ids[index] != 0:
+                token_start_mask.append(0)
+                token_end_mask.append(0)
+            else:
+                token_start_mask.append(int(start_char in word_start_chars))
+                token_end_mask.append(int(end_char in word_end_chars))
 
-            # Create token_start_mask and token_end_mask where mask = 1 if the corresponding token is either a start
-            # or an end of a word in the original dataset.
-            token_start_mask, token_end_mask = [], []
-            word_start_chars = examples["word_start_chars"][sample_index]
-            word_end_chars = examples["word_end_chars"][sample_index]
-            for index, (start_char, end_char) in enumerate(tokenized_examples["offset_mapping"][i]):
-                if sequence_ids[index] != 0:
-                    token_start_mask.append(0)
-                    token_end_mask.append(0)
-                else:
-                    token_start_mask.append(int(start_char in word_start_chars))
-                    token_end_mask.append(int(end_char in word_end_chars))
+        tokenized_examples["token_start_mask"] = token_start_mask
+        tokenized_examples["token_end_mask"] = token_end_mask
 
-            tokenized_examples["token_start_mask"].append(token_start_mask)
-            tokenized_examples["token_end_mask"].append(token_end_mask)
+        # Set to None the offset_mapping that are not part of the text so it's easy to determine if a token
+        # position is part of the text or not.
+        tokenized_examples["offset_mapping"] = [
+            (o if sequence_ids[k] == 0 else None)
+            for k, o in enumerate(tokenized_examples["offset_mapping"][0])
+        ]
 
-            # Set to None the offset_mapping that are not part of the text so it's easy to determine if a token
-            # position is part of the text or not.
-            tokenized_examples["offset_mapping"][i] = [
-                (o if sequence_ids[k] == 0 else None)
-                for k, o in enumerate(tokenized_examples["offset_mapping"][i])
-            ]
+        # print("pp4")
+
+        # print(tokenized_examples)
 
         return tokenized_examples
 
@@ -451,13 +528,21 @@ class BinderInference:
         data_args = self.data_args
 
         offset_mapping = []
+
+        # print("p1")
+
         sentence_spans = self.ru_tokenizer.span_tokenize(text)
+
+        # print("p2")
+
         for span in sentence_spans:
             start, end = span
             context = text[start : end]
             word_spans = self.word_tokenizer.span_tokenize(context)
             offset_mapping.extend([(s + start, e + start) for s, e in word_spans])
         start_words, end_words = zip(*offset_mapping)
+
+        # print("p3")
 
         predict_examples = Dataset.from_dict({
             "text" :  [text],
@@ -469,21 +554,24 @@ class BinderInference:
             "entity_end_chars" : [[]]
         })
 
+        # print("p4")
+
         if data_args.max_predict_samples is not None:
             # We will select sample from whole data
             predict_examples = predict_examples.select(range(data_args.max_predict_samples))
         # Predict Feature Creation
         with training_args.main_process_first(desc="prediction dataset map pre-processing"):
-            predict_dataset = predict_examples.map(
+            predict_dataset = self.map(
+                predict_examples,
                 lambda x: self._prepare_validation_features(x, "test"),
-                batched=True,
-                num_proc=data_args.preprocessing_num_workers,
                 remove_columns=predict_examples.column_names,
-                load_from_cache_file=not data_args.overwrite_cache,
-                desc="Running tokenizer on prediction dataset",
                 )
 
+        # print("p5")
+
         results = trainer.predict(predict_dataset, predict_examples)
+
+        # print("p6")
         predictions = results.predictions
         processed_predictions = []
         for p in predictions:
@@ -492,8 +580,123 @@ class BinderInference:
 
         return processed_predictions
 
+from tqdm.auto import tqdm
+
+tags = set()
+
 if __name__ == "__main__":
     # nltk.download('punkt_tab')
-    inf = BinderInference(device = "caa")
-    text = "Критическая уязвимость в офисном пакете Microsoft позволяет неаутентифицированным хакерам выполнять вредоносный код. Уязвимость имеет идентификатор CVE-2024-21413 и появляется при получении email-письма с вредоносной ссылкой на не обновленные версии Outlook."
-    print(inf.predict(text))
+    inf = BinderInference(device = "gpu")
+    text2pred = {}
+    dataset_path = "../data/seccol/seccol_events_texts_1500_new2"
+    for ad, dirs, files in os.walk(dataset_path):
+        for f in tqdm(sorted(files)[:30]):
+            if ".txt" in f:
+                preds = []
+                with open(os.path.join(dataset_path, f), "r", encoding = "UTF-8") as tf:
+                    text = tf.read()
+                    preds = inf.predict(text)
+                if f not in text2pred.keys():
+                    text2pred[f] = {"text" : text, "preds" : preds}
+                else:
+                    text2pred[f]["text"] = text
+                    text2pred[f]["golds"] = [(s, e, t, text[s : e]) for s, e, t in text2pred[f]["golds"]]
+                    text2pred[f]["preds"] = preds
+            if ".ann" in f:
+
+                annfile = open(os.path.join(dataset_path, f), "r", encoding = "UTF-8")
+                golds = []
+
+                for line in annfile:
+                    line_tokens = line.split()
+                    if len(line_tokens) > 3 and len(line_tokens[0]) > 1 and line_tokens[0][0] == 'T':
+                        try:
+                            #if line_tokens[1] in tags:
+                            entity_type = line_tokens[1]
+                            tags.add(entity_type)
+                            start_char = int(line_tokens[2])
+                            end_char = int(line_tokens[3])
+                        except ValueError:
+                            continue # Все неподходящие сущности
+
+                        golds.append((start_char, end_char, entity_type))
+
+                annfile.close()
+
+                txtf = f.replace('.ann', '.txt')
+                # print(txtf)
+
+                if txtf not in text2pred.keys():
+                    text2pred[txtf] = {"golds" : golds}
+                else:
+                    text = text2pred[txtf]["text"]
+                    text2pred[txtf]["golds"] = [(s, e, t, text[s : e]) for s, e, t in golds]
+
+    def compute_tp_fn_fp(predictions, labels):
+        # tp, fn, fp
+        if len(predictions) == 0:
+            return {"tp": 0, "fn": len(labels), "fp": 0}
+        if len(labels) == 0:
+            return {"tp": 0, "fn": 0, "fp": len(predictions)}
+        tp = len(predictions & labels)
+        fn = len(labels) - tp
+        fp = len(predictions) - tp
+        return {"tp": tp, "fn": fn, "fp": fp}
+
+
+    def compute_precision_recall_f1(tp, fn, fp):
+        if tp + fp + fn == 0:
+            return {"precision": 0.0, "recall": 0.0, "f1": 0.0}
+        if tp + fp == 0:
+            return {"precision": 0.0, "recall": .0, "f1": .0}
+        if tp + fn == 0:
+            return {"precision": .0, "recall": 0.0, "f1": .0}
+        precision = tp / (tp + fp)
+        recall = tp / (tp + fn)
+        f1 = 2 * tp / (2 * tp + fp + fn)
+        return {"precision": precision, "recall": recall, "f1": f1}
+
+    metrics = {}
+    for tag in tags:
+        metrics[tag] = {"tp" : 0, "fp" : 0, "fn" : 0}
+    metrics["total"] = {"tp" : 0, "fp" : 0, "fn" : 0}
+    for file in text2pred.keys():
+        # print(text2pred[file])
+        # print(file)
+        try:
+            golds = set(text2pred[file]["golds"])
+            preds = set(text2pred[file]["preds"])
+        except KeyError:
+            print(file)
+            continue
+
+        # print(sorted(list(golds)))
+        # print(sorted(list(preds)))
+
+        # with open("../data/seccol/seccol_events_texts_1500_new2/predicted30/" + file.replace('.txt','.ann')) as af:
+        #     for p in sorted(list(preds)):
+        #         af.write()
+
+        ts = compute_tp_fn_fp(preds, golds)
+        tp, fn, fp = ts["tp"], ts["fn"], ts["fp"]
+        metrics["total"]["tp"] += tp
+        metrics["total"]["fp"] += fp
+        metrics["total"]["fn"] += fn
+
+        for tag in tags:
+            tagged_golds = set([g for g in golds if g[2] == tag])
+            tagged_preds = set([p for p in preds if p[2] == tag])
+            tagged_ts = compute_tp_fn_fp(tagged_preds, tagged_golds)
+            tagged_tp, tagged_fp, tagged_fn = tagged_ts["tp"], tagged_ts["fn"], tagged_ts["fp"]
+            metrics[tag]["tp"] += tagged_tp
+            metrics[tag]["fp"] += tagged_fp
+            metrics[tag]["fn"] += tagged_fn
+
+    metrics["total"] = {**metrics["total"], **compute_precision_recall_f1(metrics["total"]["tp"], metrics["total"]["fn"], metrics["total"]["fp"])}
+    for tag in tags:
+        metrics[tag] = {**metrics[tag], **compute_precision_recall_f1(metrics[tag]["tp"], metrics[tag]["fn"], metrics[tag]["fp"])}
+
+    print(metrics)
+        
+
+

@@ -12,7 +12,6 @@
     "doc_stride": 16,
     "preprocessing_num_workers": 32,
     "dataloader_num_workers": 32,
-    "overwrite_cache": false,
     "overwrite_output_dir": true,
     "gradient_checkpointing": false,
     "optim": "adamw_torch",
