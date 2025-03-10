@@ -222,37 +222,6 @@ class DataTrainingArguments:
                 extension = self.test_file.split(".")[-1]
                 assert extension == "json", "`test_file` should be a json file."
 
-
-class CustomTrainingArguments(TrainingArguments):
-    def __init__(self, custom_device = 'cuda:0', *args, **kwargs):
-        self.custom_device = custom_device
-        self.distributed_state = None
-        super(CustomTrainingArguments, self).__init__(*args, **kwargs)
-        
-    @property
-    def device(self) -> "torch.device":
-        """
-        The device used by this process.
-        Name the device the number you use.
-        """
-        return torch.device(self.custom_device)
-
-    @property
-    def n_gpu(self):
-        """
-        The number of GPUs used by this process.
-        Note:
-            This will only be greater than one when you have multiple GPUs available but are not using distributed
-            training. For distributed training, it will always be 1.
-        """
-        # Make sure `self._n_gpu` is properly setup.
-        # _ = self._setup_devices
-        # I set to one manullay
-        # print(self.custom_device)
-        # print(len(self.custom_device.split(',')))
-        self._n_gpu = len(self.custom_device.split(',')) if self.custom_device != 'cpu' else 0
-        return self._n_gpu
-
 class BinderInference:
 
     def __init__(self, model_and_config_path = "./conf/inference/text2ner", device = "auto"):
@@ -586,11 +555,20 @@ tags = set()
 
 if __name__ == "__main__":
     # nltk.download('punkt_tab')
-    inf = BinderInference(device = "gpu")
+
+    # model_and_config_path = "./conf/inference/text2ner-nerel"
+    # dataset_path = "../data/NEREL/test"
+    # predicted_dataset_path = "../data/NEREL/test_predicted/"
+
+    model_and_config_path = "./conf/inference/text2ner"
+    dataset_path = "../data/seccol/seccol_events_texts_1500_new2-div/test"
+    predicted_dataset_path = "../data/seccol/seccol_events_texts_1500_new2-div/test_predicted/"
+
+    inf = BinderInference(model_and_config_path = model_and_config_path)
     text2pred = {}
-    dataset_path = "../data/seccol/seccol_events_texts_1500_new2"
+    
     for ad, dirs, files in os.walk(dataset_path):
-        for f in tqdm(sorted(files)[:30]):
+        for f in tqdm(sorted(files)):
             if ".txt" in f:
                 preds = []
                 with open(os.path.join(dataset_path, f), "r", encoding = "UTF-8") as tf:
@@ -602,6 +580,7 @@ if __name__ == "__main__":
                     text2pred[f]["text"] = text
                     text2pred[f]["golds"] = [(s, e, t, text[s : e]) for s, e, t in text2pred[f]["golds"]]
                     text2pred[f]["preds"] = preds
+                # print(preds)
             if ".ann" in f:
 
                 annfile = open(os.path.join(dataset_path, f), "r", encoding = "UTF-8")
@@ -631,6 +610,10 @@ if __name__ == "__main__":
                 else:
                     text = text2pred[txtf]["text"]
                     text2pred[txtf]["golds"] = [(s, e, t, text[s : e]) for s, e, t in golds]
+
+                # print(golds)
+
+    # print(list(text2pred.values())[0])
 
     def compute_tp_fn_fp(predictions, labels):
         # tp, fn, fp
@@ -673,9 +656,15 @@ if __name__ == "__main__":
         # print(sorted(list(golds)))
         # print(sorted(list(preds)))
 
-        # with open("../data/seccol/seccol_events_texts_1500_new2/predicted30/" + file.replace('.txt','.ann')) as af:
-        #     for p in sorted(list(preds)):
-        #         af.write()
+
+
+        with open(predicted_dataset_path + file, "w", encoding = "UTF-8") as tf:
+            tf.write(text2pred[file]["text"])
+
+        with open(predicted_dataset_path + file.replace('.txt','.ann'), "w", encoding = "UTF-8") as af:
+            for p_idx, p in enumerate(sorted(list(preds))):
+                s, e, t, sp = p
+                af.write("T" + str(p_idx + 1) + "\t" + t + " " + str(s) + " " + str(e) + "\t" + sp + "\n")
 
         ts = compute_tp_fn_fp(preds, golds)
         tp, fn, fp = ts["tp"], ts["fn"], ts["fp"]

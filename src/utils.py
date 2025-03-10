@@ -67,7 +67,7 @@ def postprocess_nested_predictions(
     output_dir: Optional[str] = None,
     prefix: Optional[str] = None,
     log_level: Optional[int] = logging.WARNING,
-    neutral_relative_threshold: Optional[float] = 0.5,
+    neutral_relative_threshold: Optional[float] = None,
     tokenizer = None,
     **kwargs,
 ) -> Dict:
@@ -90,7 +90,7 @@ def postprocess_nested_predictions(
     # exit(1)
 
     if len(predictions) != 4:
-        raise ValueError("`predictions` should be a tuple with three elements (input_ids, start_logits, end_logits, span_logits).")
+        raise ValueError("`predictions` should be a tuple with four elements (input_ids, start_logits, end_logits, span_logits).")
     all_input_ids, all_start_logits, all_end_logits, all_span_logits = predictions
 
     if len(predictions[1]) != len(features):
@@ -107,9 +107,9 @@ def postprocess_nested_predictions(
     # The dictionaries we have to fill.
     all_predictions = set()
 
-    all_neutral_predictions = set()
-
-    all_nonzero_predictions = set()
+    if neutral_relative_threshold is not None:
+        all_neutral_predictions = set()
+        all_nonzero_predictions = set()
 
     entity_type_vocab = list(set(id_to_type))
     entity_type_count = collections.defaultdict(int)
@@ -117,9 +117,10 @@ def postprocess_nested_predictions(
     start_metrics_by_type = {entity_type: {"tp": 0, "fn": 0, "fp": 0} for entity_type in entity_type_vocab + ["all"]}
     end_metrics_by_type = {entity_type: {"tp": 0, "fn": 0, "fp": 0} for entity_type in entity_type_vocab + ["all"]}
 
-    ner_logits = collections.defaultdict(float)
-    neu_logits = collections.defaultdict(float)
-    all_logits = collections.defaultdict(float)
+    if neutral_relative_threshold is not None:
+        ner_logits = collections.defaultdict(float)
+        neu_logits = collections.defaultdict(float)
+        all_logits = collections.defaultdict(float)
 
     # Logging.
     logger.info(f"Post-processing {len(examples)} example predictions split into {len(features)} features.")
@@ -129,8 +130,9 @@ def postprocess_nested_predictions(
     for example_index, example in enumerate(examples):
         example_annotations = set()
         example_predictions = set()
-        neutral_predictions = set()
-        nonzero_predictions = set()
+        if neutral_relative_threshold is not None:
+            neutral_predictions = set()
+            nonzero_predictions = set()
         
         # Looping through all NER annotations.
         for entity_type, start_char, end_char in zip(
@@ -167,22 +169,24 @@ def postprocess_nested_predictions(
             span_preds = np.triu(span_logits > span_logits[:, 0:1, 0:1])
 
             ### Lower threshold 
-            span_neutrals = np.triu(span_logits > span_logits[:, 0:1, 0:1] * neutral_relative_threshold)#  & span_logits <= span_logits[:, 0:1, 0:1])
+            if neutral_relative_threshold is not None:
+                span_neutrals = np.triu(span_logits > span_logits[:, 0:1, 0:1] * neutral_relative_threshold)#  & span_logits <= span_logits[:, 0:1, 0:1])
 
-            span_all = np.triu(span_logits > 0)
+                span_all = np.triu(span_logits > 0)
 
             type_ids, start_indexes, end_indexes = (
                 token_start_mask[np.newaxis, :, np.newaxis] & token_end_mask[np.newaxis, np.newaxis, :] & span_preds
             ).nonzero()
 
-            neutral_type_ids, neutral_start_indexes, neutral_end_indexes = (
-                token_start_mask[np.newaxis, :, np.newaxis] & token_end_mask[np.newaxis, np.newaxis, :] & span_neutrals
-            ).nonzero()
-            # neutral_data = (example["id"], span_neutrals)
+            if neutral_relative_threshold is not None:
+                neutral_type_ids, neutral_start_indexes, neutral_end_indexes = (
+                    token_start_mask[np.newaxis, :, np.newaxis] & token_end_mask[np.newaxis, np.newaxis, :] & span_neutrals
+                ).nonzero()
+                # neutral_data = (example["id"], span_neutrals)
 
-            all_type_ids, all_start_indexes, all_end_indexes = (
-                token_start_mask[np.newaxis, :, np.newaxis] & token_end_mask[np.newaxis, np.newaxis, :] & span_all
-            ).nonzero()
+                all_type_ids, all_start_indexes, all_end_indexes = (
+                    token_start_mask[np.newaxis, :, np.newaxis] & token_end_mask[np.newaxis, np.newaxis, :] & span_all
+                ).nonzero()
 
             # This is what will allow us to map some the positions in our logits to span of texts in the original context.
             offset_mapping = features[feature_index]["offset_mapping"]
@@ -214,88 +218,89 @@ def postprocess_nested_predictions(
                     end_char=end_char,
                     text=example["text"][start_char:end_char],
                 )
-                if id_to_type[type_id] not in ner_logits.keys():
-                    ner_logits[id_to_type[type_id]] = collections.defaultdict(float)
-                    ner_logits[id_to_type[type_id]][start_char] = collections.defaultdict(float)
-                    ner_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
-                elif start_char not in ner_logits[id_to_type[type_id]].keys():
-                    ner_logits[id_to_type[type_id]][start_char] = collections.defaultdict(float)
-                    ner_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
-                elif end_char not in ner_logits[id_to_type[type_id]][start_char].keys():
-                    ner_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
-                ner_logits[id_to_type[type_id]][start_char][end_char] = float(span_logits[type_id][start_index][end_index])
+                if neutral_relative_threshold is not None:
+                    if id_to_type[type_id] not in ner_logits.keys():
+                        ner_logits[id_to_type[type_id]] = collections.defaultdict(float)
+                        ner_logits[id_to_type[type_id]][start_char] = collections.defaultdict(float)
+                        ner_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
+                    elif start_char not in ner_logits[id_to_type[type_id]].keys():
+                        ner_logits[id_to_type[type_id]][start_char] = collections.defaultdict(float)
+                        ner_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
+                    elif end_char not in ner_logits[id_to_type[type_id]][start_char].keys():
+                        ner_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
+                    ner_logits[id_to_type[type_id]][start_char][end_char] = float(span_logits[type_id][start_index][end_index])
                 example_predictions.add(pred)
 
+            if neutral_relative_threshold is not None:
+                for type_id, start_index, end_index in zip(neutral_type_ids, neutral_start_indexes, neutral_end_indexes):
+                    # Don't consider out-of-scope answers, either because the indices are out of bounds or correspond
+                    # to part of the input_ids that are not in the context.
 
-            for type_id, start_index, end_index in zip(neutral_type_ids, neutral_start_indexes, neutral_end_indexes):
-                # Don't consider out-of-scope answers, either because the indices are out of bounds or correspond
-                # to part of the input_ids that are not in the context.
+                    if (
+                        start_index >= len(offset_mapping)
+                        or end_index >= len(offset_mapping)
+                        or offset_mapping[start_index] is None
+                        or offset_mapping[end_index] is None
+                    ):
+                        continue
+                    # Don't consider spans with a length that is > max_span_length.
+                    if end_index - start_index + 1 > max_span_length:
+                        continue
+                    # A prediction contains (example_id, entity_type, start_index, end_index)
+                    start_char, end_char = offset_mapping[start_index][0], offset_mapping[end_index][1]
+                    pred = Annotation(
+                        id=example["id"],
+                        entity_type=id_to_type[type_id],
+                        start_char=start_char,
+                        end_char=end_char,
+                        text=example["text"][start_char:end_char]
+                    )
+                    if id_to_type[type_id] not in neu_logits.keys():
+                        neu_logits[id_to_type[type_id]] = collections.defaultdict(float)
+                        neu_logits[id_to_type[type_id]][start_char] = collections.defaultdict(float)
+                        neu_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
+                    elif start_char not in neu_logits[id_to_type[type_id]].keys():
+                        neu_logits[id_to_type[type_id]][start_char] = collections.defaultdict(float)
+                        neu_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
+                    elif end_char not in neu_logits[id_to_type[type_id]][start_char].keys():
+                        neu_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
+                    neu_logits[id_to_type[type_id]][start_char][end_char] = float(span_logits[type_id][start_index][end_index])
+                    neutral_predictions.add(pred)
+                    
+                for type_id, start_index, end_index in zip(all_type_ids, all_start_indexes, all_end_indexes):
+                    # Don't consider out-of-scope answers, either because the indices are out of bounds or correspond
+                    # to part of the input_ids that are not in the context.
 
-                if (
-                    start_index >= len(offset_mapping)
-                    or end_index >= len(offset_mapping)
-                    or offset_mapping[start_index] is None
-                    or offset_mapping[end_index] is None
-                ):
-                    continue
-                # Don't consider spans with a length that is > max_span_length.
-                if end_index - start_index + 1 > max_span_length:
-                    continue
-                # A prediction contains (example_id, entity_type, start_index, end_index)
-                start_char, end_char = offset_mapping[start_index][0], offset_mapping[end_index][1]
-                pred = Annotation(
-                    id=example["id"],
-                    entity_type=id_to_type[type_id],
-                    start_char=start_char,
-                    end_char=end_char,
-                    text=example["text"][start_char:end_char]
-                )
-                if id_to_type[type_id] not in neu_logits.keys():
-                    neu_logits[id_to_type[type_id]] = collections.defaultdict(float)
-                    neu_logits[id_to_type[type_id]][start_char] = collections.defaultdict(float)
-                    neu_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
-                elif start_char not in neu_logits[id_to_type[type_id]].keys():
-                    neu_logits[id_to_type[type_id]][start_char] = collections.defaultdict(float)
-                    neu_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
-                elif end_char not in neu_logits[id_to_type[type_id]][start_char].keys():
-                    neu_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
-                neu_logits[id_to_type[type_id]][start_char][end_char] = float(span_logits[type_id][start_index][end_index])
-                neutral_predictions.add(pred)
-                
-            for type_id, start_index, end_index in zip(all_type_ids, all_start_indexes, all_end_indexes):
-                # Don't consider out-of-scope answers, either because the indices are out of bounds or correspond
-                # to part of the input_ids that are not in the context.
-
-                if (
-                    start_index >= len(offset_mapping)
-                    or end_index >= len(offset_mapping)
-                    or offset_mapping[start_index] is None
-                    or offset_mapping[end_index] is None
-                ):
-                    continue
-                # Don't consider spans with a length that is > max_span_length.
-                if end_index - start_index + 1 > max_span_length:
-                    continue
-                # A prediction contains (example_id, entity_type, start_index, end_index)
-                start_char, end_char = offset_mapping[start_index][0], offset_mapping[end_index][1]
-                pred = Annotation(
-                    id=example["id"],
-                    entity_type=id_to_type[type_id],
-                    start_char=start_char,
-                    end_char=end_char,
-                    text=example["text"][start_char:end_char],
-                )
-                if id_to_type[type_id] not in all_logits.keys():
-                    all_logits[id_to_type[type_id]] = collections.defaultdict(float)
-                    all_logits[id_to_type[type_id]][start_char] = collections.defaultdict(float)
-                    all_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
-                elif start_char not in all_logits[id_to_type[type_id]].keys():
-                    all_logits[id_to_type[type_id]][start_char] = collections.defaultdict(float)
-                    all_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
-                elif end_char not in all_logits[id_to_type[type_id]][start_char].keys():
-                    all_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
-                all_logits[id_to_type[type_id]][start_char][end_char] = float(span_logits[type_id][start_index][end_index])
-                nonzero_predictions.add(pred)
+                    if (
+                        start_index >= len(offset_mapping)
+                        or end_index >= len(offset_mapping)
+                        or offset_mapping[start_index] is None
+                        or offset_mapping[end_index] is None
+                    ):
+                        continue
+                    # Don't consider spans with a length that is > max_span_length.
+                    if end_index - start_index + 1 > max_span_length:
+                        continue
+                    # A prediction contains (example_id, entity_type, start_index, end_index)
+                    start_char, end_char = offset_mapping[start_index][0], offset_mapping[end_index][1]
+                    pred = Annotation(
+                        id=example["id"],
+                        entity_type=id_to_type[type_id],
+                        start_char=start_char,
+                        end_char=end_char,
+                        text=example["text"][start_char:end_char],
+                    )
+                    if id_to_type[type_id] not in all_logits.keys():
+                        all_logits[id_to_type[type_id]] = collections.defaultdict(float)
+                        all_logits[id_to_type[type_id]][start_char] = collections.defaultdict(float)
+                        all_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
+                    elif start_char not in all_logits[id_to_type[type_id]].keys():
+                        all_logits[id_to_type[type_id]][start_char] = collections.defaultdict(float)
+                        all_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
+                    elif end_char not in all_logits[id_to_type[type_id]][start_char].keys():
+                        all_logits[id_to_type[type_id]][start_char][end_char] = collections.defaultdict(float)
+                    all_logits[id_to_type[type_id]][start_char][end_char] = float(span_logits[type_id][start_index][end_index])
+                    nonzero_predictions.add(pred)
 
 
         for t in metrics_by_type.keys():
@@ -311,8 +316,9 @@ def postprocess_nested_predictions(
 
         all_annotations.update(example_annotations)
         all_predictions.update(example_predictions)
-        all_neutral_predictions.update(neutral_predictions)
-        all_nonzero_predictions.update(nonzero_predictions)
+        if neutral_relative_threshold is not None:
+            all_neutral_predictions.update(neutral_predictions)
+            all_nonzero_predictions.update(nonzero_predictions)
             
         example_gold_starts = set((x.entity_type, x.start_char) for x in example_annotations)
         example_pred_starts = set((x.entity_type, x.start_char) for x in example_predictions)
@@ -367,23 +373,23 @@ def postprocess_nested_predictions(
         if not os.path.isdir(output_dir):
             raise EnvironmentError(f"{output_dir} is not a directory.")
 
-        ner_pred_thresholds = list(span_logits[:, 0:1, 0:1])
-        neu_pred_thresholds = list(span_logits[:, 0:1, 0:1] * neutral_relative_threshold)
+        if neutral_relative_threshold is not None:
+            ner_pred_thresholds = list(span_logits[:, 0:1, 0:1])
+            neu_pred_thresholds = list(span_logits[:, 0:1, 0:1] * neutral_relative_threshold)
+            logits_file = os.path.join(
+                output_dir, "thresholds.json"
+            )
 
-        logits_file = os.path.join(
-            output_dir, "thresholds.json"
-        )
-
-        logger.info(f"Saving thresholds to {logits_file}.")
-        with open(logits_file, "w") as writer:
-            outdict = {}
-            outdict["ner"] = dict().copy()
-            outdict["neu"] = dict().copy()
-            for type_id, threshold in enumerate(ner_pred_thresholds):
-                outdict["ner"][id_to_type[type_id]] = float(threshold)
-            for type_id, threshold in enumerate(neu_pred_thresholds):
-                outdict["neu"][id_to_type[type_id]] = float(threshold)
-            json.dump(outdict, writer, ensure_ascii = False, indent = 2)
+            logger.info(f"Saving thresholds to {logits_file}.")
+            with open(logits_file, "w") as writer:
+                outdict = {}
+                outdict["ner"] = dict().copy()
+                outdict["neu"] = dict().copy()
+                for type_id, threshold in enumerate(ner_pred_thresholds):
+                    outdict["ner"][id_to_type[type_id]] = float(threshold)
+                for type_id, threshold in enumerate(neu_pred_thresholds):
+                    outdict["neu"][id_to_type[type_id]] = float(threshold)
+                json.dump(outdict, writer, ensure_ascii = False, indent = 2)
 
         # Convert flat predictions to hierarchical.
         example_id_to_predictions = {}
@@ -391,21 +397,25 @@ def postprocess_nested_predictions(
             example_id = pred.id
             if example_id not in example_id_to_predictions:
                 example_id_to_predictions[example_id] = set()
-            example_id_to_predictions[example_id].add((pred.start_char, pred.end_char, pred.entity_type, pred.text, ner_logits[pred.entity_type][pred.start_char][pred.end_char]))
+            if neutral_relative_threshold is not None: 
+                example_id_to_predictions[example_id].add((pred.start_char, pred.end_char, pred.entity_type, pred.text, ner_logits[pred.entity_type][pred.start_char][pred.end_char]))
+            else:
+                example_id_to_predictions[example_id].add((pred.start_char, pred.end_char, pred.entity_type, pred.text))
 
-        example_id_to_neutral_predictions = {}
-        for neut in all_neutral_predictions:
-            example_id = neut.id
-            if example_id not in example_id_to_neutral_predictions:
-                example_id_to_neutral_predictions[example_id] = set()
-            example_id_to_neutral_predictions[example_id].add((neut.start_char, neut.end_char, neut.entity_type, neut.text, neu_logits[neut.entity_type][neut.start_char][neut.end_char]))
+        if neutral_relative_threshold is not None:
+            example_id_to_neutral_predictions = {}
+            for neut in all_neutral_predictions:
+                example_id = neut.id
+                if example_id not in example_id_to_neutral_predictions:
+                    example_id_to_neutral_predictions[example_id] = set()
+                example_id_to_neutral_predictions[example_id].add((neut.start_char, neut.end_char, neut.entity_type, neut.text, neu_logits[neut.entity_type][neut.start_char][neut.end_char]))
 
-        example_id_to_all_predictions = {}
-        for nonzero in all_nonzero_predictions:
-            example_id = nonzero.id
-            if example_id not in example_id_to_all_predictions:
-                example_id_to_all_predictions[example_id] = set()
-            example_id_to_all_predictions[example_id].add((nonzero.start_char, nonzero.end_char, nonzero.entity_type, nonzero.text, all_logits[nonzero.entity_type][nonzero.start_char][nonzero.end_char]))
+            example_id_to_all_predictions = {}
+            for nonzero in all_nonzero_predictions:
+                example_id = nonzero.id
+                if example_id not in example_id_to_all_predictions:
+                    example_id_to_all_predictions[example_id] = set()
+                example_id_to_all_predictions[example_id].add((nonzero.start_char, nonzero.end_char, nonzero.entity_type, nonzero.text, all_logits[nonzero.entity_type][nonzero.start_char][nonzero.end_char]))
 
         predictions_to_save = []
         for example in examples:
@@ -434,60 +444,61 @@ def postprocess_nested_predictions(
             for pred in predictions_to_save:
                 writer.write(json.dumps(pred, ensure_ascii = False) + "\n")
 
-        neutrals_to_save = []
-        for example in examples:
-            example = copy.deepcopy(example)
-            example.pop("word_start_chars")
-            example.pop("word_end_chars")
-            gold_ner = set()
-            for entity_type, start_char, end_char in zip(
-                example["entity_types"], example["entity_start_chars"], example["entity_end_chars"]):
-                gold_ner.add((start_char, end_char, entity_type, example["text"][start_char:end_char]))
-            example.pop("entity_types")
-            example.pop("entity_start_chars")
-            example.pop("entity_end_chars")
+        if neutral_relative_threshold is not None:         
+            neutrals_to_save = []
+            for example in examples:
+                example = copy.deepcopy(example)
+                example.pop("word_start_chars")
+                example.pop("word_end_chars")
+                gold_ner = set()
+                for entity_type, start_char, end_char in zip(
+                    example["entity_types"], example["entity_start_chars"], example["entity_end_chars"]):
+                    gold_ner.add((start_char, end_char, entity_type, example["text"][start_char:end_char]))
+                example.pop("entity_types")
+                example.pop("entity_start_chars")
+                example.pop("entity_end_chars")
 
-            pred_ner = example_id_to_neutral_predictions.get(example["id"], set())
-            example["gold_ner"] = sorted(gold_ner)
-            example["pred_ner"] = sorted(pred_ner)
-            neutrals_to_save.append(example)
+                pred_ner = example_id_to_neutral_predictions.get(example["id"], set())
+                example["gold_ner"] = sorted(gold_ner)
+                example["pred_ner"] = sorted(pred_ner)
+                neutrals_to_save.append(example)
 
-        neutrals_file = os.path.join(
-            output_dir, "neutrals.json" if prefix is None else f"{prefix}_neutrals.json"
-        )
+            neutrals_file = os.path.join(
+                output_dir, "neutrals.json" if prefix is None else f"{prefix}_neutrals.json"
+            )
 
-        logger.info(f"Saving neutrals to {neutrals_file}.")
+            logger.info(f"Saving neutrals to {neutrals_file}.")
 
-        with open(neutrals_file, "w") as writer:
-            for neut in neutrals_to_save:
-                writer.write(json.dumps(neut, ensure_ascii = False) + "\n")
+            with open(neutrals_file, "w") as writer:
+                for neut in neutrals_to_save:
+                    writer.write(json.dumps(neut, ensure_ascii = False) + "\n")
 
-        logits_to_save = []
-        for example in examples:
-            example = copy.deepcopy(example)
-            example.pop("word_start_chars")
-            example.pop("word_end_chars")
-            gold_ner = set()
-            for entity_type, start_char, end_char in zip(
-                example["entity_types"], example["entity_start_chars"], example["entity_end_chars"]):
-                gold_ner.add((start_char, end_char, entity_type, example["text"][start_char:end_char]))
-            example.pop("entity_types")
-            example.pop("entity_start_chars")
-            example.pop("entity_end_chars")
+            logits_to_save = []
+            for example in examples:
+                example = copy.deepcopy(example)
+                example.pop("word_start_chars")
+                example.pop("word_end_chars")
+                gold_ner = set()
+                for entity_type, start_char, end_char in zip(
+                    example["entity_types"], example["entity_start_chars"], example["entity_end_chars"]):
+                    gold_ner.add((start_char, end_char, entity_type, example["text"][start_char:end_char]))
+                example.pop("entity_types")
+                example.pop("entity_start_chars")
+                example.pop("entity_end_chars")
 
-            pred_ner = example_id_to_all_predictions.get(example["id"], set())
-            example["gold_ner"] = sorted(gold_ner)
-            example["pred_ner"] = sorted(pred_ner)
-            logits_to_save.append(example)        
+                pred_ner = example_id_to_all_predictions.get(example["id"], set())
+                example["gold_ner"] = sorted(gold_ner)
+                example["pred_ner"] = sorted(pred_ner)
+                logits_to_save.append(example)        
 
-        all_logits_file = os.path.join(
-            output_dir, "all_logits.json" if prefix is None else f"{prefix}_all_logits.json"
-        )
+            all_logits_file = os.path.join(
+                output_dir, "all_logits.json" if prefix is None else f"{prefix}_all_logits.json"
+            )
 
-        logger.info(f"Saving all logits to {all_logits_file}.")
-        with open(all_logits_file, "w") as writer:
-            for logit in logits_to_save:
-                writer.write(json.dumps(logit, ensure_ascii = False) + "\n")
+            logger.info(f"Saving all logits to {all_logits_file}.")
+            with open(all_logits_file, "w") as writer:
+                for logit in logits_to_save:
+                    writer.write(json.dumps(logit, ensure_ascii = False) + "\n")
 
         metric_file = os.path.join(
             output_dir, "metrics.json" if prefix is None else f"{prefix}_metrics.json"
