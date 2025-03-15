@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import torch
 from transformers.trainer import Trainer
 from transformers.trainer_utils import PredictionOutput
+import transformers
 
 
 logger = logging.getLogger(__name__)
@@ -114,6 +115,8 @@ class BinderTrainer(Trainer):
         super().__init__(*args, **kwargs)
         self.eval_examples = eval_examples
         self.post_process_function = post_process_function
+        from transformers.trainer_callback import PrinterCallback
+        self.remove_callback(PrinterCallback)
 
     def _prepare_inputs(self, inputs: Dict[str, Union[torch.Tensor, Any]]) -> Dict[str, Union[torch.Tensor, Any]]:
         """
@@ -165,9 +168,12 @@ class BinderTrainer(Trainer):
     def predict(self, predict_dataset, predict_examples, ignore_keys=None, metric_key_prefix: str = "test"):
         predict_dataloader = self.get_test_dataloader(predict_dataset)
 
+
+        transformers.logging.set_verbosity_error()
+
         output = self.evaluation_loop(
             predict_dataloader,
-            description="Prediction",
+            description="",
             prediction_loss_only=None,
             ignore_keys=ignore_keys,
         )

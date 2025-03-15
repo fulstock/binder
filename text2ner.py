@@ -41,6 +41,9 @@ class ModelArguments:
     model_name_or_path: str = field(
         metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
     )
+    binder_model_name_or_path : str = field(
+        metadata={"help" : "Path to pretrained Binder model from huggingface.co/models or local path to a saved Binder module."}
+    )
     config_name: Optional[str] = field(
         default=None, metadata={"help": "Pretrained config name or path if not the same as model_name"}
     )
@@ -224,11 +227,11 @@ class DataTrainingArguments:
 
 class BinderInference:
 
-    def __init__(self, model_and_config_path = "./conf/inference/text2ner", device = "auto"):
+    def __init__(self, config_path = "./conf/inference/text2ner/inference-config.json", device = "auto"):
         os.environ["WANDB_DISABLED"] = "true"
 
         parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments))
-        model_args, data_args, training_args = parser.parse_json_file(json_file=os.path.abspath(os.path.join(model_and_config_path, "inference-config.json")))
+        model_args, data_args, training_args = parser.parse_json_file(json_file=config_path)
         if device == "cpu":
             # training_args.no_cuda = True
             # training_args.custom_device = 'cpu'
@@ -270,7 +273,13 @@ class BinderInference:
             threshold_loss_weight=model_args.threshold_loss_weight,
             ner_loss_weight=model_args.ner_loss_weight,
         )
-        model = Binder.from_pretrained(model_and_config_path, config = config)
+        model = Binder.from_pretrained(model_args.binder_model_name_or_path, config = config)
+
+        # model.save_pretrained("seccol-binder", safe_serialization = True)
+        # model.push_to_hub("seccol-binder")
+        # tokenizer.push_to_hub("seccol-binder")
+
+        # exit(0)
 
         if not isinstance(tokenizer, PreTrainedTokenizerFast):
             raise ValueError(
@@ -360,8 +369,8 @@ class BinderInference:
         with_indices = False
         with_rank = False
         input_columns = None
-        batched = False
-        batch_size = 1000
+        batched = True
+        batch_size = None
         keep_in_memory = False
         num_proc = 1
         cache_file_name = None
@@ -372,7 +381,9 @@ class BinderInference:
         suffix_template = "_{rank:05d}_of_{num_proc:05d}"
         drop_last_batch = False
         new_fingerprint = None
-        desc = "Running tokenizer on prediction dataset"
+        desc = None
+
+        
 
         """
         Apply a function to all the examples in the table (individually or in batches) and update the table.
@@ -388,6 +399,8 @@ class BinderInference:
           Note that the last batch may have less than `n` examples.
           A batch is a dictionary, e.g. a batch of `n` examples is `{"text": ["Hello there !"] * n}`.
         """
+
+
 
         if isinstance(remove_columns, str):
             remove_columns = [remove_columns]
@@ -420,9 +433,12 @@ class BinderInference:
         transformed_dataset = None
 
         if transformed_dataset is None:
+            # with tqdm(unit = " examples", total = len(dataset), desc = desc or "Map") as pbar:
             for rank, done, content in Dataset._map_single(**dataset_kwargs):
                 if done:
                     transformed_dataset = content
+                # else:
+                #     pbar.update(content)
 
         assert transformed_dataset is not None, "Failed to retrieve the result from map"
 
@@ -450,43 +466,46 @@ class BinderInference:
 
         # For evaluation, we will need to convert our predictions to spans of the text, so we keep the
         # corresponding example_id and we will store the offset mappings.
-        tokenized_examples['input_ids'] = tokenized_examples['input_ids'][0]
-        tokenized_examples['attention_mask'] = tokenized_examples['attention_mask'][0]
-        tokenized_examples['token_type_ids'] = tokenized_examples['token_type_ids'][0]
-        tokenized_examples["split"] = "test"
+        tokenized_examples["split"] = []
+        tokenized_examples["example_id"] = []
+        tokenized_examples["token_start_mask"] = []
+        tokenized_examples["token_end_mask"] = []
 
         # Grab the sequence corresponding to that example (to know what is the text and what are special tokens).
-        sequence_ids = tokenized_examples.sequence_ids(0)
+        for i in range(len(tokenized_examples["input_ids"])):
+            tokenized_examples["split"].append(split)
 
-        # One example can give several texts, this is the index of the example containing this text.
-        tokenized_examples["example_id"] = examples["id"]
+            # Grab the sequence corresponding to that example (to know what is the text and what are special tokens).
+            sequence_ids = tokenized_examples.sequence_ids(i)
 
-        # Create token_start_mask and token_end_mask where mask = 1 if the corresponding token is either a start
-        # or an end of a word in the original dataset.
-        token_start_mask, token_end_mask = [], []
-        word_start_chars = examples["word_start_chars"]
-        word_end_chars = examples["word_end_chars"]
-        for index, (start_char, end_char) in enumerate(tokenized_examples["offset_mapping"][0]):
-            if sequence_ids[index] != 0:
-                token_start_mask.append(0)
-                token_end_mask.append(0)
-            else:
-                token_start_mask.append(int(start_char in word_start_chars))
-                token_end_mask.append(int(end_char in word_end_chars))
+            # One example can give several texts, this is the index of the example containing this text.
+            sample_index = sample_mapping[i]
+            tokenized_examples["example_id"].append(examples["id"][sample_index])
 
-        tokenized_examples["token_start_mask"] = token_start_mask
-        tokenized_examples["token_end_mask"] = token_end_mask
+            # Create token_start_mask and token_end_mask where mask = 1 if the corresponding token is either a start
+            # or an end of a word in the original dataset.
+            token_start_mask, token_end_mask = [], []
+            word_start_chars = examples["word_start_chars"][sample_index]
+            word_end_chars = examples["word_end_chars"][sample_index]
+            for index, (start_char, end_char) in enumerate(tokenized_examples["offset_mapping"][i]):
+                if sequence_ids[index] != 0:
+                    token_start_mask.append(0)
+                    token_end_mask.append(0)
+                else:
+                    # print(word_start_chars)
+                    # print(start_char)
+                    token_start_mask.append(int(start_char in word_start_chars))
+                    token_end_mask.append(int(end_char in word_end_chars))
 
-        # Set to None the offset_mapping that are not part of the text so it's easy to determine if a token
-        # position is part of the text or not.
-        tokenized_examples["offset_mapping"] = [
-            (o if sequence_ids[k] == 0 else None)
-            for k, o in enumerate(tokenized_examples["offset_mapping"][0])
-        ]
+            tokenized_examples["token_start_mask"].append(token_start_mask)
+            tokenized_examples["token_end_mask"].append(token_end_mask)
 
-        # print("pp4")
-
-        # print(tokenized_examples)
+            # Set to None the offset_mapping that are not part of the text so it's easy to determine if a token
+            # position is part of the text or not.
+            tokenized_examples["offset_mapping"][i] = [
+                (o if sequence_ids[k] == 0 else None)
+                for k, o in enumerate(tokenized_examples["offset_mapping"][i])
+            ]
 
         return tokenized_examples
 
@@ -538,7 +557,7 @@ class BinderInference:
 
         # print("p5")
 
-        results = trainer.predict(predict_dataset, predict_examples)
+        results = trainer.predict(predict_dataset, predict_examples, ignore_keys = ["offset_mapping", "example_id", "split", "token_start_mask", "token_end_mask"])
 
         # print("p6")
         predictions = results.predictions
@@ -551,20 +570,23 @@ class BinderInference:
 
 from tqdm.auto import tqdm
 
+datasets.disable_progress_bar()
+datasets.logging.set_verbosity(datasets.logging.CRITICAL)
 tags = set()
 
 if __name__ == "__main__":
     # nltk.download('punkt_tab')
 
-    # model_and_config_path = "./conf/inference/text2ner-nerel"
+    # inference_config_path = "./conf/inference/text2ner-nerel/inference-config.json"
     # dataset_path = "../data/NEREL/test"
     # predicted_dataset_path = "../data/NEREL/test_predicted/"
 
-    model_and_config_path = "./conf/inference/text2ner"
+    inference_config_path = "./conf/inference/text2ner/inference-config.json"
     dataset_path = "../data/seccol/seccol_events_texts_1500_new2-div/test"
     predicted_dataset_path = "../data/seccol/seccol_events_texts_1500_new2-div/test_predicted/"
 
-    inf = BinderInference(model_and_config_path = model_and_config_path)
+    inf = BinderInference(config_path = inference_config_path)
+    # print(inf.predict(text))
     text2pred = {}
     
     for ad, dirs, files in os.walk(dataset_path):
@@ -655,8 +677,6 @@ if __name__ == "__main__":
 
         # print(sorted(list(golds)))
         # print(sorted(list(preds)))
-
-
 
         with open(predicted_dataset_path + file, "w", encoding = "UTF-8") as tf:
             tf.write(text2pred[file]["text"])
