@@ -641,3 +641,172 @@ def error_analysis(annotations: Set[Annotation], predictions: Set[Annotation], e
             }
         })
     return ret
+
+
+def postprocess_nested_predictions_with_threshold(
+    examples,
+    features,
+    predictions: Tuple[np.ndarray, np.ndarray, np.ndarray],
+    id_to_type: List[str],
+    max_span_length: int = 30,
+    output_dir: Optional[str] = None,
+    prefix: Optional[str] = None,
+    log_level: Optional[int] = logging.WARNING,
+    neutral_relative_threshold: Optional[float] = None,
+    tokenizer = None,
+    threshold_factor: float = 1.0,
+    **kwargs,
+) -> Dict:
+    """
+    Custom postprocessing function that supports threshold factor for lowering prediction thresholds.
+    """
+    logger.setLevel(log_level)
+    
+    if len(predictions) != 4:
+        raise ValueError("`predictions` should be a tuple with four elements (input_ids, start_logits, end_logits, span_logits).")
+    all_input_ids, all_start_logits, all_end_logits, all_span_logits = predictions
+
+    if len(predictions[1]) != len(features):
+        raise ValueError(f"Got {len(predictions[1])} predictions and {len(features)} features.")
+
+    # Build a map example to its corresponding features.
+    example_id_to_index = {k: i for i, k in enumerate(examples["id"])}
+    features_per_example = collections.defaultdict(list)
+    for i, feature in enumerate(features):
+        features_per_example[example_id_to_index[feature["example_id"]]].append(i)
+
+    # The gold annotations.
+    all_annotations = set()
+    # The dictionaries we have to fill.
+    all_predictions = set()
+
+    entity_type_vocab = list(set(id_to_type))
+    entity_type_count = collections.defaultdict(int)
+    metrics_by_type = {entity_type: {"tp": 0, "fn": 0, "fp": 0} for entity_type in entity_type_vocab + ["all"]}
+
+    # Logging.
+    logger.info(f"Post-processing {len(examples)} example predictions split into {len(features)} features with threshold factor {threshold_factor}.")
+
+    # Let's loop over all the examples!
+    for example_index, example in enumerate(examples):
+        example_annotations = set()
+        example_predictions = set()
+        
+        # Looping through all NER annotations.
+        for entity_type, start_char, end_char in zip(
+            example["entity_types"], example["entity_start_chars"], example["entity_end_chars"]):
+            entity_type_count["all"] += 1
+            entity_type_count[entity_type] += 1
+            example_annotations.add(Annotation(
+                id=example["id"],
+                entity_type=entity_type,
+                start_char=start_char,
+                end_char=end_char,
+                text=example["text"][start_char:end_char]
+            ))
+
+        # Those are the indices of the features associated to the current example.
+        feature_indices = features_per_example[example_index]
+
+        # Looping through all the features associated to the current example.
+        for feature_index in feature_indices:
+            # We grab the masks for start and end indices.
+            token_start_mask = np.array(features[feature_index]["token_start_mask"]).astype(bool)
+            token_end_mask = np.array(features[feature_index]["token_end_mask"]).astype(bool)
+
+            # We grab the predictions of the model for this feature.
+            span_logits = all_span_logits[feature_index]
+
+            # Apply threshold factor - we use the [CLS] logits as thresholds but scaled by threshold_factor
+            cls_threshold = span_logits[:, 0:1, 0:1] * threshold_factor
+            span_preds = np.triu(span_logits > cls_threshold)
+
+            type_ids, start_indexes, end_indexes = (
+                token_start_mask[np.newaxis, :, np.newaxis] & token_end_mask[np.newaxis, np.newaxis, :] & span_preds
+            ).nonzero()
+
+            # This is what will allow us to map some the positions in our logits to span of texts in the original context.
+            offset_mapping = features[feature_index]["offset_mapping"]
+
+            # Go through all start and end indices.
+            for type_id, start_index, end_index in zip(type_ids, start_indexes, end_indexes):
+                # Don't consider out-of-scope answers, either because the indices are out of bounds or correspond
+                # to part of the input_ids that are not in the context.
+                if (
+                    start_index >= len(offset_mapping)
+                    or end_index >= len(offset_mapping)
+                    or offset_mapping[start_index] is None
+                    or offset_mapping[end_index] is None
+                ):
+                    continue
+                # Don't consider spans with a length that is > max_span_length.
+                if end_index - start_index + 1 > max_span_length:
+                    continue
+                # A prediction contains (example_id, entity_type, start_index, end_index)
+                start_char, end_char = offset_mapping[start_index][0], offset_mapping[end_index][1]
+                pred = Annotation(
+                    id=example["id"],
+                    entity_type=id_to_type[type_id],
+                    start_char=start_char,
+                    end_char=end_char,
+                    text=example["text"][start_char:end_char],
+                )
+                example_predictions.add(pred)
+
+        for t in metrics_by_type.keys():
+            for k, v in compute_tp_fn_fp(
+                example_predictions if t == "all" else set(filter(lambda x: x.entity_type == t, example_predictions)),
+                example_annotations if t == "all" else set(filter(lambda x: x.entity_type == t, example_annotations)),
+            ).items():
+                metrics_by_type[t][k] += v
+
+        all_annotations.update(example_annotations)
+        all_predictions.update(example_predictions)
+
+    metrics = collections.OrderedDict()
+    sorted_entity_types = ["all"] + sorted(entity_type_vocab, key=lambda x: entity_type_count[x], reverse=True)
+    
+    metrics["span"] = {}
+    for t in sorted_entity_types:
+        metrics_for_t = compute_everything(**metrics_by_type[t])
+        metrics["span"][t] = {}
+        for k, v in metrics_for_t.items():
+            metrics["span"][t][k] = v
+
+    for t in sorted_entity_types:
+        support = entity_type_count[t]
+        logger.info(f"***** {t} ({support}) *****")
+        f1, precision, recall = metrics["span"][t]["f1"], metrics["span"][t]["precision"], metrics["span"][t]["recall"]
+        logger.info(f"F1 = {f1:>6.1%}, Precision = {precision:>6.1%}, Recall = {recall:>6.1%} (with threshold factor {threshold_factor})")
+
+    reduced_metrics = dict()
+    for tag in metrics["span"].keys():
+        if tag != 'all':
+            reduced_metrics[tag + "-f1"] = metrics["span"][tag]["f1"]
+            reduced_metrics[tag + "-recall"] = metrics["span"][tag]["recall"]
+            reduced_metrics[tag + "-precision"] = metrics["span"][tag]["precision"]
+            reduced_metrics[tag + "-tp"] = metrics["span"][tag]["tp"]
+            reduced_metrics[tag + "-fp"] = metrics["span"][tag]["fp"]
+            reduced_metrics[tag + "-fn"] = metrics["span"][tag]["fn"]
+
+    reduced_metrics["macro-f1"] = reduced_metrics["f1"] = np.mean([v for k, v in reduced_metrics.items() if "f1" in k])
+    reduced_metrics["macro-precision"] = reduced_metrics["precision"] = np.mean([v for k, v in reduced_metrics.items() if "precision" in k])
+    reduced_metrics["macro-recall"] = reduced_metrics["recall"] = np.mean([v for k, v in reduced_metrics.items() if "recall" in k])
+
+    total_tp = sum([v for k, v in reduced_metrics.items() if "-tp" in k])
+    total_fp = sum([v for k, v in reduced_metrics.items() if "-fp" in k])
+    total_fn = sum([v for k, v in reduced_metrics.items() if "-fn" in k])
+
+    prf = compute_precision_recall_f1(int(total_tp), int(total_fn), int(total_fp))
+
+    reduced_metrics["micro-precision"] = prf["precision"]
+    reduced_metrics["micro-recall"] = prf["recall"]
+    reduced_metrics["micro-f1"] = prf["f1"] 
+
+    metrics = reduced_metrics
+
+    return {
+        "predictions": all_predictions,
+        "labels": all_annotations,
+        "metrics": metrics,
+    }
