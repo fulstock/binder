@@ -13,8 +13,13 @@
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
+.cursorignore
+sergey-requirements-windows.txt
+
 # Mono auto generated files
 mono_crash.*
+
+data/*
 
 # Build results
 [Dd]ebug/
