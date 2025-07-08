@@ -408,7 +408,33 @@ class BinderInference:
         self.prediction_threshold_factor = prediction_threshold_factor
         if prediction_threshold_factor != 1.0:
             print(f"Using custom prediction threshold factor: {prediction_threshold_factor}")
+
+        # Optimize torch threading for CPU inference
+        if self.device == "cpu":
+            try:
+                torch.set_num_threads(min(4, os.cpu_count()))
+                print(f"torch num threads set to {torch.get_num_threads()}")
+            except Exception as _e:
+                print(f"Could not set torch thread count: {_e}")
             
+    def _optimize_model(self, model):
+        """Apply mixed-precision and compilation/JIT techniques for faster inference."""
+        try:
+            # Convert to half precision when running on GPU for speed & memory benefits
+            if self.device != "cpu" and torch.cuda.is_available():
+                model = model.half()
+            # Use torch.compile if available (PyTorch ≥2.0) otherwise fall back to torch.jit.script
+            if hasattr(torch, "compile"):
+                model = torch.compile(model, mode="reduce-overhead", fullgraph=False)
+                print("Model compiled with torch.compile for faster inference")
+            else:
+                model = torch.jit.script(model)
+                print("Model scripted with torch.jit.script for faster inference")
+        except Exception as _opt_e:
+            # Silently skip optimisation on failure to keep inference robust
+            print(f"Model optimization skipped: {_opt_e}")
+        return model
+
     @property
     def ru_tokenizer(self):
         """Lazy loading of Russian tokenizer"""
@@ -689,6 +715,9 @@ class BinderInference:
             print("Model moved to GPU")
         else:
             print("Using CPU for inference")
+
+        # Apply additional model-level optimisations (half-precision, compile/JIT)
+        model = self._optimize_model(model)
 
         # Data collator
         data_collator = BinderDataCollator(
