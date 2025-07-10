@@ -63,6 +63,7 @@ import logging
 import os
 import sys
 import json
+import platform
 from dataclasses import dataclass, field
 from typing import Optional, List
 
@@ -90,6 +91,7 @@ from src.config import BinderConfig
 from src.model import Binder
 from src.trainer import BinderDataCollator, BinderTrainer
 from src import utils as postprocess_utils
+from src.memory_callback import MemoryUsageCallback
 
 # Use the same argument classes as run_ner.py
 from run_ner import ModelArguments, DataTrainingArguments
@@ -135,6 +137,32 @@ class BinderTraining:
         self.entity_type_str_to_id = None
         self.max_seq_length = None
         
+    def _get_safe_num_workers(self, requested_workers: Optional[int]) -> int:
+        """
+        Determine a safe number of workers for dataset preprocessing.
+        Windows systems often have thread limitations that cause issues with multiprocessing.
+        """
+        if requested_workers is None:
+            # Default behavior when no workers specified
+            if platform.system() == "Windows":
+                return 1  # Use single process on Windows to avoid thread issues
+            else:
+                return min(4, os.cpu_count() or 1)  # Conservative default for other systems
+        
+        # If user explicitly requested workers, respect it but with safety limits
+        if platform.system() == "Windows":
+            # On Windows, limit to 2 workers max to prevent thread exhaustion
+            safe_workers = min(requested_workers, 2)
+            if safe_workers != requested_workers:
+                logger.warning(
+                    f"⚠️ Reducing preprocessing workers from {requested_workers} to {safe_workers} "
+                    f"on Windows to prevent thread exhaustion issues"
+                )
+            return safe_workers
+        else:
+            # On other systems, limit to reasonable number
+            return min(requested_workers, os.cpu_count() or 1)
+
     def setup(self):
         """Parses arguments and sets up logging and environment variables."""
         parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments))
@@ -166,16 +194,31 @@ class BinderTraining:
         # `transformers` may configure the root logger before we get here which prevents `basicConfig` from
         # adding our handlers.  Using `force=True` (Python ≥3.8) overrides any existing configuration so that
         # our stream & file handlers are correctly attached and log messages become visible.
+        
+        # Create console handler with explicit INFO level to ensure stdout logging
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(logging.Formatter(
+            "%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+            datefmt="%m/%d/%Y %H:%M:%S"
+        ))
+        
         logging.basicConfig(
             level=logging.INFO,
             format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
             datefmt="%m/%d/%Y %H:%M:%S",
-            handlers=[logging.StreamHandler(sys.stdout), log_file_handler],
+            handlers=[console_handler, log_file_handler],
             force=True,
         )
 
         log_level = self.training_args.get_process_log_level()
-        logger.setLevel(log_level)
+        # Ensure our logger is at least INFO level for stdout visibility
+        effective_log_level = min(log_level, logging.INFO)
+        logger.setLevel(effective_log_level)
+        
+        # Force console output to INFO level regardless of training args
+        console_handler.setLevel(logging.INFO)
+        
         datasets.utils.logging.set_verbosity(log_level)
         transformers.utils.logging.set_verbosity(log_level)
         transformers.utils.logging.enable_default_handler()
@@ -232,14 +275,17 @@ class BinderTraining:
                 examples[self.data_args.entity_type_desc_field],
                 truncation=True,
                 max_length=self.max_seq_length,
-                padding="longest" if len(entity_type_knowledge) <= 1000 else "max_length",
+                padding="max_length",  # Always pad to max_length to ensure consistent shapes
             )
             return tokenized_examples
 
         with self.training_args.main_process_first(desc="Tokenizing entity type descriptions"):
+            # Disable multiprocessing for entity type tokenization to prevent memory issues
+            # Entity type datasets are typically small and don't benefit from multiprocessing
             tokenized_descriptions = entity_type_knowledge.map(
                 prepare_type_features,
                 batched=True,
+                num_proc=1,  # Use single process to avoid memory allocation issues
                 load_from_cache_file=not self.data_args.overwrite_cache,
                 desc="Running tokenizer on type descriptions",
                 remove_columns=entity_type_knowledge.column_names,
@@ -429,11 +475,14 @@ class BinderTraining:
 
         # Process training dataset
         logger.info("Starting dataset tokenization and preprocessing...")
+        safe_num_workers = self._get_safe_num_workers(self.data_args.preprocessing_num_workers)
+        logger.info(f"Using {safe_num_workers} workers for dataset preprocessing")
+        
         with self.training_args.main_process_first(desc="train dataset map pre-processing"):
             self.train_dataset = train_data.map(
                 prepare_train_features,
                 batched=True,
-                num_proc=self.data_args.preprocessing_num_workers,
+                num_proc=safe_num_workers,
                 remove_columns=train_data.column_names,
                 load_from_cache_file=not self.data_args.overwrite_cache,
                 desc="Running tokenizer on train dataset",
@@ -528,11 +577,12 @@ class BinderTraining:
             return tokenized_examples
 
         # Process validation dataset
+        safe_num_workers = self._get_safe_num_workers(self.data_args.preprocessing_num_workers)
         with self.training_args.main_process_first(desc="validation dataset map pre-processing"):
             self.eval_dataset = eval_data.map(
                 prepare_validation_features,
                 batched=True,
-                num_proc=self.data_args.preprocessing_num_workers,
+                num_proc=safe_num_workers,
                 remove_columns=eval_data.column_names,
                 load_from_cache_file=not self.data_args.overwrite_cache,
                 desc="Running tokenizer on validation dataset",
@@ -604,11 +654,12 @@ class BinderTraining:
             return tokenized_examples
 
         # Process test dataset
+        safe_num_workers = self._get_safe_num_workers(self.data_args.preprocessing_num_workers)
         with self.training_args.main_process_first(desc="test dataset map pre-processing"):
             self.predict_dataset = test_data.map(
                 prepare_test_features,
                 batched=True,
-                num_proc=self.data_args.preprocessing_num_workers,
+                num_proc=safe_num_workers,
                 remove_columns=test_data.column_names,
                 load_from_cache_file=not self.data_args.overwrite_cache,
                 desc="Running tokenizer on test dataset",
@@ -811,9 +862,19 @@ class BinderTraining:
 
         # Initialize Trainer
         # Only use EarlyStoppingCallback when doing evaluation, since it requires load_best_model_at_end=True
-        callbacks = []
+        callbacks = [MemoryUsageCallback()]
         if do_eval and self.eval_dataset is not None:
             callbacks.append(EarlyStoppingCallback(early_stopping_patience=20))
+        
+        # Disable evaluation in training arguments if do_eval=False
+        if not do_eval:
+            # Override evaluation settings to prevent trainer from trying to evaluate
+            self.training_args.evaluation_strategy = "no"
+            self.training_args.eval_steps = None
+            self.training_args.eval_delay = 0
+            self.training_args.load_best_model_at_end = False
+            self.training_args.metric_for_best_model = None
+            logger.info("🚫 Evaluation disabled - overriding training arguments to prevent evaluation during training")
         
         trainer = BinderTrainer(
             model=self.model,
@@ -1052,13 +1113,13 @@ if __name__ == "__main__":
         
         # Example usage options:
         # 1. Training only (fastest, no evaluation or prediction)
-        trainer = binder_trainer.train_only()
+        # trainer = binder_trainer.train_only()
         
         # 2. Training with evaluation
         # trainer = binder_trainer.train_and_evaluate()
         
         # 3. Full training, evaluation, and prediction (default behavior)
-        # trainer = binder_trainer.train()
+        trainer = binder_trainer.train()
         
         # 4. You can also use the original behavior:
         # trainer = binder_trainer.train_evaluate_and_predict()
