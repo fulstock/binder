@@ -69,6 +69,13 @@ from typing import Optional, List
 import datasets
 from datasets import load_dataset
 import transformers
+import torch  # For GPU memory usage introspection
+
+# Optional: psutil provides detailed system memory usage on CPU
+try:
+    import psutil  # type: ignore
+except ImportError:  # pragma: no cover
+    psutil = None
 from transformers import (
     AutoTokenizer,
     HfArgumentParser,
@@ -761,7 +768,26 @@ class BinderTraining:
 
         # Load model
         logger.info(f"Initializing Binder model with {len(self.entity_type_id_to_str)} entity types")
-        self.model = Binder(config)
+        # If a Binder checkpoint path is supplied, load weights from there to continue training
+        if getattr(self.model_args, "binder_model_name_or_path", None):
+            try:
+                logger.info(
+                    f"Loading Binder weights from checkpoint: {self.model_args.binder_model_name_or_path}"
+                )
+                self.model = Binder.from_pretrained(
+                    self.model_args.binder_model_name_or_path,
+                    config=config,
+                    ignore_mismatched_sizes=True,
+                )
+                logger.info("✅ Loaded Binder checkpoint successfully – continuing training from previous weights.")
+            except Exception as e:
+                logger.warning(
+                    f"⚠️  Could not load Binder checkpoint due to: {e}. Initializing a new Binder model instead."
+                )
+                self.model = Binder(config)
+        else:
+            # No checkpoint provided → start from scratch
+            self.model = Binder(config)
         
         # Validate model initialization
         logger.info(f"Model initialized successfully")
@@ -801,6 +827,29 @@ class BinderTraining:
             callbacks=callbacks,
             compute_metrics=None,
         )
+
+        # --------------------------------------------------
+        # Memory usage logging BEFORE training begins
+        # --------------------------------------------------
+        try:
+            device = self.training_args.device
+        except AttributeError:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        if torch.cuda.is_available() and device.type == "cuda":
+            # Ensure we look at the correct device (in multi-GPU setups)
+            gpu_index = device.index if device.index is not None else torch.cuda.current_device()
+            allocated = torch.cuda.memory_allocated(gpu_index) / (1024 ** 3)
+            reserved = torch.cuda.memory_reserved(gpu_index) / (1024 ** 3)
+            logger.info(
+                f"📊 GPU memory usage before training – allocated: {allocated:.2f} GB | reserved: {reserved:.2f} GB (device {gpu_index})"
+            )
+        else:
+            if psutil is not None:
+                process_mem = psutil.Process(os.getpid()).memory_info().rss / (1024 ** 3)
+                logger.info(f"📊 CPU memory (RSS) before training: {process_mem:.2f} GB")
+            else:
+                logger.info("📊 psutil not installed; CPU memory usage unavailable")
 
         # Training (always performed)
         logger.info("*** Starting Training ***")

@@ -39,11 +39,38 @@ class BinderDataCollator:
 
         # exit(0)
 
+        # Dynamically pad sequences in case they are of different lengths
+        def _pad(seq: List[int], target_len: int, pad_token: int = 0):
+            # Ensure the sequence is a Python list of ints
+            if not isinstance(seq, list):
+                # Convert tensors or numpy arrays to list
+                if hasattr(seq, "tolist"):
+                    seq = seq.tolist()
+                else:
+                    seq = list(seq)
+
+            # Truncate in the rare case the sequence is already longer than target_len
+            if len(seq) >= target_len:
+                return seq[:target_len]
+
+            # Pad to the required length
+            return seq + [pad_token] * (target_len - len(seq))
+
+        max_len = max(len(f["input_ids"]) for f in features)
+
         batch = {}
-        batch['input_ids'] = torch.tensor([f['input_ids'] for f in features], dtype=torch.long)
-        batch['attention_mask'] = torch.tensor([f['attention_mask'] for f in features], dtype=torch.bool)
+        batch['input_ids'] = torch.tensor([
+            _pad(f['input_ids'], max_len, 0) for f in features
+        ], dtype=torch.long)
+
+        batch['attention_mask'] = torch.tensor([
+            _pad(f['attention_mask'], max_len, 0) for f in features
+        ], dtype=torch.bool)
+
         if "token_type_ids" in features[0]:
-            batch['token_type_ids'] = torch.tensor([f['token_type_ids'] for f in features], dtype=torch.long)
+            batch['token_type_ids'] = torch.tensor([
+                _pad(f['token_type_ids'], max_len, 0) for f in features
+            ], dtype=torch.long)
 
         batch['type_input_ids'] = self.type_input_ids
         batch['type_attention_mask'] = self.type_attention_mask
@@ -193,4 +220,19 @@ class BinderTrainer(Trainer):
         self.log(metrics)
 
         return PredictionOutput(predictions=predictions["predictions"], label_ids=predictions["labels"], metrics=metrics)
+
+    def get_test_dataloader(self, test_dataset):
+        """
+        Override to disable multiprocessing for test dataloader to avoid "too many open files" error.
+        """
+        from torch.utils.data import DataLoader
+        
+        return DataLoader(
+            test_dataset,
+            batch_size=self.args.eval_batch_size,
+            collate_fn=self.data_collator,
+            num_workers=0,  # Disable multiprocessing
+            pin_memory=False,
+            shuffle=False,
+        )
 

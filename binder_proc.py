@@ -581,9 +581,9 @@ if __name__ == "__main__":
     # dataset_path = "../data/NEREL/test"
     # predicted_dataset_path = "../data/NEREL/test_predicted/"
 
-    inference_config_path = "./conf/inference/text2ner/inference-config.json"
-    dataset_path = "../data/seccol/seccol_events_texts_1500_new2-div/test"
-    predicted_dataset_path = "../data/seccol/seccol_events_texts_1500_new2-div/test_predicted/"
+    inference_config_path = "./inference/inference-config-optimized.json"
+    dataset_path = "S:/HRCode/data/NEREL1.1/test"
+    predicted_dataset_path = "S:/HRCode/data/NEREL1.1/test_predicted"
 
     inf = BinderInference(config_path = inference_config_path)
     # print(inf.predict(text))

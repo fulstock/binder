@@ -4,6 +4,7 @@ Fine-tune Binder for named entity recognition.
 
 import os
 import sys
+from pathlib import Path  # more convenient/robust path handling
 from dataclasses import dataclass, field
 from typing import Optional, List
 
@@ -577,63 +578,63 @@ tags = set()
 if __name__ == "__main__":
     # nltk.download('punkt_tab')
 
-    # inference_config_path = "./conf/inference/text2ner-nerel/inference-config.json"
-    # dataset_path = "../data/NEREL/test"
-    # predicted_dataset_path = "../data/NEREL/test_predicted/"
+    # --- CONFIGURABLE PATHS -------------------------------------------------
+    # You can override these via environment variables if needed.
+    inference_config_path   = os.getenv("T2N_INFERENCE_CFG",  "./conf/inference/text2ner/inference-config.json")
+    dataset_path           = os.getenv("T2N_DATASET_PATH",   "../data/seccol/seccol_events_texts_1500_new2-div/test")
+    predicted_dataset_path = os.getenv("T2N_PRED_OUT",       "../data/seccol/seccol_events_texts_1500_new2-div/test_predicted/")
 
-    inference_config_path = "./conf/inference/text2ner/inference-config.json"
-    dataset_path = "../data/seccol/seccol_events_texts_1500_new2-div/test"
-    predicted_dataset_path = "../data/seccol/seccol_events_texts_1500_new2-div/test_predicted/"
+    # Ensure the output directory exists
+    Path(predicted_dataset_path).mkdir(parents=True, exist_ok=True)
 
-    inf = BinderInference(config_path = inference_config_path)
-    # print(inf.predict(text))
+    inf = BinderInference(config_path=inference_config_path)
+
     text2pred = {}
-    
-    for ad, dirs, files in os.walk(dataset_path):
-        for f in tqdm(sorted(files)):
-            if ".txt" in f:
-                preds = []
-                with open(os.path.join(dataset_path, f), "r", encoding = "UTF-8") as tf:
-                    text = tf.read()
-                    preds = inf.predict(text)
-                if f not in text2pred.keys():
-                    text2pred[f] = {"text" : text, "preds" : preds}
-                else:
-                    text2pred[f]["text"] = text
-                    text2pred[f]["golds"] = [(s, e, t, text[s : e]) for s, e, t in text2pred[f]["golds"]]
-                    text2pred[f]["preds"] = preds
-                # print(preds)
-            if ".ann" in f:
 
-                annfile = open(os.path.join(dataset_path, f), "r", encoding = "UTF-8")
-                golds = []
+    dataset_path = Path(dataset_path)
 
-                for line in annfile:
-                    line_tokens = line.split()
-                    if len(line_tokens) > 3 and len(line_tokens[0]) > 1 and line_tokens[0][0] == 'T':
-                        try:
-                            #if line_tokens[1] in tags:
-                            entity_type = line_tokens[1]
-                            tags.add(entity_type)
-                            start_char = int(line_tokens[2])
-                            end_char = int(line_tokens[3])
-                        except ValueError:
-                            continue # Все неподходящие сущности
+    # -------------------- PROCESS TXT FILES --------------------------------
+    txt_files = sorted(dataset_path.rglob("*.txt"))
+    for txt_file in tqdm(txt_files, desc="Predicting"):
+        text = txt_file.read_text(encoding="utf-8")
+        preds = inf.predict(text)
 
+        fname = txt_file.name
+        if fname not in text2pred:
+            text2pred[fname] = {"text": text, "preds": preds}
+        else:
+            # Preserve / merge existing golds if they were read earlier
+            text2pred[fname]["text"] = text
+            if "golds" in text2pred[fname]:
+                text2pred[fname]["golds"] = [
+                    (s, e, t, text[s:e]) for s, e, t in text2pred[fname]["golds"]
+                ]
+            text2pred[fname]["preds"] = preds
+
+    # -------------------- PROCESS ANN FILES --------------------------------
+    ann_files = sorted(dataset_path.rglob("*.ann"))
+    for ann_path in tqdm(ann_files, desc="Reading annotations"):
+        with ann_path.open("r", encoding="utf-8") as annfile:
+            golds = []
+            for line in annfile:
+                parts = line.split()
+                if len(parts) > 3 and parts[0].startswith("T"):
+                    try:
+                        entity_type = parts[1]
+                        start_char = int(parts[2])
+                        end_char = int(parts[3])
+                        tags.add(entity_type)
                         golds.append((start_char, end_char, entity_type))
+                    except ValueError:
+                        # Skip malformed annotation lines
+                        continue
 
-                annfile.close()
-
-                txtf = f.replace('.ann', '.txt')
-                # print(txtf)
-
-                if txtf not in text2pred.keys():
-                    text2pred[txtf] = {"golds" : golds}
-                else:
-                    text = text2pred[txtf]["text"]
-                    text2pred[txtf]["golds"] = [(s, e, t, text[s : e]) for s, e, t in golds]
-
-                # print(golds)
+        txt_fname = ann_path.with_suffix(".txt").name
+        if txt_fname not in text2pred:
+            text2pred[txt_fname] = {"golds": golds}
+        else:
+            text = text2pred[txt_fname]["text"]
+            text2pred[txt_fname]["golds"] = [(s, e, t, text[s:e]) for s, e, t in golds]
 
     # print(list(text2pred.values())[0])
 

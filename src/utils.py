@@ -162,6 +162,17 @@ def postprocess_nested_predictions(
             # We grab the predictions of the model for this feature.
             span_logits = all_span_logits[feature_index]
 
+            # Ensure that the span logits sequence length matches the length of the token masks.
+            # Determine the common effective sequence length between logits and token masks.
+            seq_len_tokens = len(token_start_mask)
+            seq_len_logits = span_logits.shape[1]
+            if seq_len_tokens != seq_len_logits:
+                common_len = min(seq_len_tokens, seq_len_logits)
+                # Truncate both the logits and the masks so that they are compatible.
+                span_logits = span_logits[:, :common_len, :common_len]
+                token_start_mask = token_start_mask[:common_len]
+                token_end_mask = token_end_mask[:common_len]
+
             ### Two thresholds for flat2nested. Upper and lower one. Upper: positive vs others, lower: neutral vs negative. 
 
             ### Upper threshold is [CLS] logits as below
@@ -381,7 +392,7 @@ def postprocess_nested_predictions(
             )
 
             logger.info(f"Saving thresholds to {logits_file}.")
-            with open(logits_file, "w") as writer:
+            with open(logits_file, "w", encoding="utf-8") as writer:
                 outdict = {}
                 outdict["ner"] = dict().copy()
                 outdict["neu"] = dict().copy()
@@ -440,7 +451,7 @@ def postprocess_nested_predictions(
         )
 
         logger.info(f"Saving predictions to {prediction_file}.")
-        with open(prediction_file, "w") as writer:
+        with open(prediction_file, "w", encoding="utf-8") as writer:
             for pred in predictions_to_save:
                 writer.write(json.dumps(pred, ensure_ascii = False) + "\n")
 
@@ -469,7 +480,7 @@ def postprocess_nested_predictions(
 
             logger.info(f"Saving neutrals to {neutrals_file}.")
 
-            with open(neutrals_file, "w") as writer:
+            with open(neutrals_file, "w", encoding="utf-8") as writer:
                 for neut in neutrals_to_save:
                     writer.write(json.dumps(neut, ensure_ascii = False) + "\n")
 
@@ -496,7 +507,7 @@ def postprocess_nested_predictions(
             )
 
             logger.info(f"Saving all logits to {all_logits_file}.")
-            with open(all_logits_file, "w") as writer:
+            with open(all_logits_file, "w", encoding="utf-8") as writer:
                 for logit in logits_to_save:
                     writer.write(json.dumps(logit, ensure_ascii = False) + "\n")
 
@@ -505,7 +516,7 @@ def postprocess_nested_predictions(
         )
 
         logger.info(f"Saving metrics to {metric_file}.")
-        with open(metric_file, "a") as writer:
+        with open(metric_file, "a", encoding="utf-8") as writer:
             writer.write(json.dumps(metrics) + "\n")
 
     reduced_metrics = dict()
@@ -717,13 +728,42 @@ def postprocess_nested_predictions_with_threshold(
             # We grab the predictions of the model for this feature.
             span_logits = all_span_logits[feature_index]
 
-            # Apply threshold factor - we use the [CLS] logits as thresholds but scaled by threshold_factor
-            cls_threshold = span_logits[:, 0:1, 0:1] * threshold_factor
-            span_preds = np.triu(span_logits > cls_threshold)
+            # Ensure that the span logits sequence length matches the length of the token masks.
+            # Determine the common effective sequence length between logits and token masks.
+            seq_len_tokens = len(token_start_mask)
+            seq_len_logits = span_logits.shape[1]
+            if seq_len_tokens != seq_len_logits:
+                common_len = min(seq_len_tokens, seq_len_logits)
+                # Truncate both the logits and the masks so that they are compatible.
+                span_logits = span_logits[:, :common_len, :common_len]
+                token_start_mask = token_start_mask[:common_len]
+                token_end_mask = token_end_mask[:common_len]
+
+            ### Two thresholds for flat2nested. Upper and lower one. Upper: positive vs others, lower: neutral vs negative. 
+
+            ### Upper threshold is [CLS] logits as below
+            # We use the [CLS] logits as thresholds --- 
+            span_preds = np.triu(span_logits > span_logits[:, 0:1, 0:1])
+
+            ### Lower threshold 
+            if neutral_relative_threshold is not None:
+                span_neutrals = np.triu(span_logits > span_logits[:, 0:1, 0:1] * neutral_relative_threshold)#  & span_logits <= span_logits[:, 0:1, 0:1])
+
+                span_all = np.triu(span_logits > 0)
 
             type_ids, start_indexes, end_indexes = (
                 token_start_mask[np.newaxis, :, np.newaxis] & token_end_mask[np.newaxis, np.newaxis, :] & span_preds
             ).nonzero()
+
+            if neutral_relative_threshold is not None:
+                neutral_type_ids, neutral_start_indexes, neutral_end_indexes = (
+                    token_start_mask[np.newaxis, :, np.newaxis] & token_end_mask[np.newaxis, np.newaxis, :] & span_neutrals
+                ).nonzero()
+                # neutral_data = (example["id"], span_neutrals)
+
+                all_type_ids, all_start_indexes, all_end_indexes = (
+                    token_start_mask[np.newaxis, :, np.newaxis] & token_end_mask[np.newaxis, np.newaxis, :] & span_all
+                ).nonzero()
 
             # This is what will allow us to map some the positions in our logits to span of texts in the original context.
             offset_mapping = features[feature_index]["offset_mapping"]

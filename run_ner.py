@@ -40,6 +40,12 @@ class ModelArguments:
     model_name_or_path: str = field(
         metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
     )
+    binder_model_name_or_path: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "Path to pretrained Binder model checkpoint (local dir or HF repo) to resume/further train from. If None, a fresh Binder model is initialized."
+        },
+    )
     config_name: Optional[str] = field(
         default=None, metadata={"help": "Pretrained config name or path if not the same as model_name"}
     )
