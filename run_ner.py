@@ -194,6 +194,10 @@ class DataTrainingArguments:
         default=None,
         metadata={"help": "The name of WANDB project."},
     )
+    shuffle_seed: Optional[int] = field(
+        default = None,
+        metadata = {"help": "Shuffling seed."},
+    )
 
     def __post_init__(self):
         if (
@@ -523,11 +527,17 @@ def main():
 
         return processed_examples
 
+    if data_args.shuffle_seed:
+        logger.warning("Shuffling of data enabled.")
+
     if training_args.do_train:
 
         if "train" not in raw_datasets:
             raise ValueError("--do_train requires a train dataset")
         train_dataset = raw_datasets["train"]
+        if data_args.shuffle_seed:
+            train_dataset = train_dataset.shuffle(seed = data_args.shuffle_seed)
+
         if data_args.max_train_samples is not None:
             # We will select sample from whole data if argument is specified
             train_dataset = train_dataset.select(range(data_args.max_train_samples))
@@ -607,6 +617,8 @@ def main():
         if "validation" not in raw_datasets:
             raise ValueError("--do_eval requires a validation dataset")
         eval_examples = raw_datasets["validation"]
+        if data_args.shuffle_seed:
+            eval_examples = eval_examples.shuffle(seed = data_args.shuffle_seed)
         if data_args.max_eval_samples is not None:
             # We will select sample from whole data
             eval_examples = eval_examples.select(range(data_args.max_eval_samples))
@@ -625,6 +637,8 @@ def main():
         if "test" not in raw_datasets:
             raise ValueError("--do_predict requires a test dataset")
         predict_examples = raw_datasets["test"]
+        if data_args.shuffle_seed:
+            predict_examples = predict_examples.shuffle(seed = data_args.shuffle_seed)
         if data_args.max_predict_samples is not None:
             # We will select sample from whole data
             predict_examples = predict_examples.select(range(data_args.max_predict_samples))

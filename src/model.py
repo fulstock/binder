@@ -45,8 +45,18 @@ def masked_log_softmax(vector: torch.Tensor, mask: torch.BoolTensor, dim: int = 
     extreme, you've got bigger problems than this.
     """
     if mask is not None:
+        # Ensure mask has the same number of dimensions as vector
         while mask.dim() < vector.dim():
             mask = mask.unsqueeze(1)
+        
+        # Ensure mask has the same shape as vector
+        if mask.shape != vector.shape:
+            # Try to broadcast mask to vector shape
+            try:
+                mask = mask.expand_as(vector)
+            except RuntimeError as e:
+                raise RuntimeError(f"Mask shape {mask.shape} cannot be broadcast to vector shape {vector.shape}: {e}")
+        
         # vector + mask.log() is an easy way to zero out masked elements in logspace, but it
         # results in nans when the whole vector is masked.  We need a very small value instead of a
         # zero in the mask for these cases.
@@ -56,11 +66,12 @@ def masked_log_softmax(vector: torch.Tensor, mask: torch.BoolTensor, dim: int = 
 
 def contrastive_loss(
     scores: torch.FloatTensor,
-    positions: Union[List[int], Tuple[List[int], List[int]]],
+    positions: Union[List[int], Tuple[List[int], List[int]], torch.Tensor, Tuple[torch.Tensor, torch.Tensor]],
     mask: torch.BoolTensor,
     prob_mask: torch.BoolTensor = None,
 ) -> torch.FloatTensor:
     batch_size, seq_length = scores.size(0), scores.size(1)
+    
     if len(scores.shape) == 3:
         scores = scores.view(batch_size, -1)
         mask = mask.view(batch_size, -1)
@@ -73,6 +84,7 @@ def contrastive_loss(
         log_probs = masked_log_softmax(scores, mask)
         batch_indices = list(range(batch_size))
         log_probs = log_probs[batch_indices, positions]
+    
     if prob_mask is not None:
         log_probs = log_probs * prob_mask
     return - log_probs.mean()
@@ -200,19 +212,24 @@ class Binder(PreTrainedModel):
         #     return_dict=return_dict,
         # )
 
+        batch_size, seq_length, hidden_size = sequence_output.size()
+        type_batch_size, num_types, type_seq_length = type_input_ids.size()
+
+        type_input_ids_flat = type_input_ids.view(-1, type_seq_length)
+        type_attention_mask_flat = type_attention_mask.view(-1, type_seq_length) if type_attention_mask is not None else None
+        type_token_type_ids_flat = type_token_type_ids.view(-1, type_seq_length) if type_token_type_ids is not None else None
+
         type_outputs = self.type_encoder(
-            type_input_ids,
-            attention_mask=type_attention_mask,
-            token_type_ids=type_token_type_ids if type_token_type_ids is not None else None,
+            type_input_ids_flat,
+            attention_mask=type_attention_mask_flat,
+            token_type_ids=type_token_type_ids_flat,
             return_dict=return_dict,
         )
 
         # exit(1)
         # num_types x hidden_size
         type_output = type_outputs[0][:, 0]
-
-        batch_size, seq_length, _ = sequence_output.size()
-        num_types, _ = type_output.size()
+        type_output = type_output.view(batch_size, num_types, hidden_size)
 
         # num_types x hidden_size
         type_start_output = F.normalize(self.dropout(self.type_start_linear(type_output)), dim=-1)
@@ -282,17 +299,58 @@ class Binder(PreTrainedModel):
             ner_start_masks, ner_end_masks = ner["example_start_masks"], ner["example_end_masks"]
             ner_span_masks = ner["example_span_masks"]
 
-            start_loss = contrastive_loss(start_scores[ner_indices], ner_starts, ner_start_masks)
-            end_loss = contrastive_loss(end_scores[ner_indices], ner_ends, ner_end_masks)
-            span_loss = contrastive_loss(span_scores[ner_indices], (ner_starts, ner_ends), ner_span_masks)
+            # Extract the specific scores for the positive examples
+            feature_ids, span_type_ids = ner_indices
+            
+            # Check if there are any valid spans
+            if len(feature_ids) == 0:
+                # No valid spans in this batch, return zero loss
+                total_loss = torch.tensor(0.0, device=start_scores.device, requires_grad=True)
+            else:
+                # Use a simpler loop-based approach to avoid CUDA device-side asserts
+                start_scores_pos = []
+                end_scores_pos = []
+                span_scores_pos = []
+                
+                for i, (batch_idx, type_idx) in enumerate(zip(feature_ids, span_type_ids)):
+                    # Based on tensor shape [1, batch_size, num_types, seq_length]
+                    # batch_idx should index dimension 1 (batch_size)
+                    # type_idx should index dimension 2 (num_types)
+                    start_scores_pos.append(start_scores[0, batch_idx, type_idx])
+                    end_scores_pos.append(end_scores[0, batch_idx, type_idx])
+                    # span_scores has shape [batch_size, num_types, seq_length, seq_length] (no extra batch dim)
+                    span_tensor = span_scores[batch_idx, type_idx]
+                    span_scores_pos.append(span_tensor)
+                
+                start_scores_pos = torch.stack(start_scores_pos)
+                end_scores_pos = torch.stack(end_scores_pos)
+                span_scores_pos = torch.stack(span_scores_pos)
+                
+                # Convert positions to tensors if they're lists
+                ner_starts_tensor = torch.tensor(ner_starts, device=start_scores_pos.device)
+                ner_ends_tensor = torch.tensor(ner_ends, device=end_scores_pos.device)
 
-            total_loss = (
-                self.start_loss_weight * start_loss +
-                self.end_loss_weight * end_loss +
-                self.span_loss_weight * span_loss
-            )
+                # Ensure masks have the correct shape
+                if ner_start_masks.shape != start_scores_pos.shape:
+                    raise ValueError(f"Start mask shape {ner_start_masks.shape} doesn't match scores shape {start_scores_pos.shape}")
+                if ner_end_masks.shape != end_scores_pos.shape:
+                    raise ValueError(f"End mask shape {ner_end_masks.shape} doesn't match scores shape {end_scores_pos.shape}")
+                if ner_span_masks.shape != span_scores_pos.shape:
+                    raise ValueError(f"Span mask shape {ner_span_masks.shape} doesn't match scores shape {span_scores_pos.shape}")
 
-            total_loss = self.ner_loss_weight * total_loss + self.threshold_loss_weight * threshold_loss
+                start_loss = contrastive_loss(start_scores_pos, ner_starts_tensor, ner_start_masks)
+                end_loss = contrastive_loss(end_scores_pos, ner_ends_tensor, ner_end_masks)
+                span_loss = contrastive_loss(span_scores_pos, (ner_starts_tensor, ner_ends_tensor), ner_span_masks)
+
+                total_loss = (
+                    self.start_loss_weight * start_loss +
+                    self.end_loss_weight * end_loss +
+                    self.span_loss_weight * span_loss
+                )
+
+            # Calculate total loss (either from positive examples or zero)
+            if len(feature_ids) > 0:
+                total_loss = self.ner_loss_weight * total_loss + self.threshold_loss_weight * threshold_loss
 
         if not return_dict:
             output = (start_scores, end_scores, span_scores) + outputs[2:]

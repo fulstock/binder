@@ -89,12 +89,16 @@ def postprocess_nested_predictions(
 
     # exit(1)
 
-    if len(predictions) != 4:
-        raise ValueError("`predictions` should be a tuple with four elements (input_ids, start_logits, end_logits, span_logits).")
-    all_input_ids, all_start_logits, all_end_logits, all_span_logits = predictions
+    if len(predictions) == 4:
+        all_input_ids, all_start_logits, all_end_logits, all_span_logits = predictions
+    elif len(predictions) == 3:
+        all_start_logits, all_end_logits, all_span_logits = predictions
+        all_input_ids = None
+    else:
+        raise ValueError("Predictions must contain 3 or 4 elements")
 
-    if len(predictions[1]) != len(features):
-        raise ValueError(f"Got {len(predictions[1])} predictions and {len(features)} features.")
+    if len(all_span_logits) != len(features):
+        raise ValueError(f"Got {len(all_span_logits)} span predictions and {len(features)} features.")
 
     # Build a map example to its corresponding features.
     example_id_to_index = {k: i for i, k in enumerate(examples["id"])}
