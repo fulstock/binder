@@ -11,6 +11,8 @@ from typing import Optional, List
 import datasets
 from datasets import load_dataset
 
+from tqdm.auto import tqdm
+
 import transformers
 from transformers import (
     AutoTokenizer,
@@ -198,6 +200,10 @@ class DataTrainingArguments:
         default = None,
         metadata = {"help": "Shuffling seed."},
     )
+    weighted_loss: Optional[bool] = field(
+        default = False,
+        metadata = {"help" : "Use weighted contrastive loss."}
+    )
 
     def __post_init__(self):
         if (
@@ -313,24 +319,6 @@ def main():
         use_auth_token=True if model_args.use_auth_token else None,
         add_prefix_space=True,
     )
-    logger.info("===== Init the model =====")
-    config = BinderConfig(
-        pretrained_model_name_or_path=model_args.config_name if model_args.config_name else model_args.model_name_or_path,
-        cache_dir=model_args.cache_dir,
-        revision=model_args.model_revision,
-        use_auth_token=True if model_args.use_auth_token else None,
-        hidden_dropout_prob=model_args.hidden_dropout_prob,
-        max_span_width=data_args.max_seq_length + 1,
-        use_span_width_embedding=model_args.use_span_width_embedding,
-        linear_size=model_args.linear_size,
-        init_temperature=model_args.init_temperature,
-        start_loss_weight=model_args.start_loss_weight,
-        end_loss_weight=model_args.end_loss_weight,
-        span_loss_weight=model_args.span_loss_weight,
-        threshold_loss_weight=model_args.threshold_loss_weight,
-        ner_loss_weight=model_args.ner_loss_weight,
-    )
-    model = Binder(config)
 
     # Tokenizer check: this script requires a fast tokenizer.
     if not isinstance(tokenizer, PreTrainedTokenizerFast):
@@ -686,6 +674,41 @@ def main():
         )
 
         return metrics
+
+    if data_args.weighted_loss:
+
+        from collections import Counter
+        logger.info("===== Using weighted loss =====")
+
+        all_entity_types = [e['type_id'] for t in tqdm(train_dataset) for e in t['ner']['annotations']]  # Returns list of type indices
+        class_counts = Counter(all_entity_types)
+        print(class_counts)
+        num_classes = max(class_counts.keys()) + 1  # Assuming 0-indexed class IDs
+
+        # Create frequency list (ensure all classes are represented, even if count=0)
+        class_frequencies = [class_counts.get(i, 0) for i in range(num_classes)]
+    else:
+        class_frequencies = None
+
+    logger.info("===== Init the model =====")
+    config = BinderConfig(
+        pretrained_model_name_or_path=model_args.config_name if model_args.config_name else model_args.model_name_or_path,
+        cache_dir=model_args.cache_dir,
+        revision=model_args.model_revision,
+        use_auth_token=True if model_args.use_auth_token else None,
+        hidden_dropout_prob=model_args.hidden_dropout_prob,
+        max_span_width=data_args.max_seq_length + 1,
+        use_span_width_embedding=model_args.use_span_width_embedding,
+        linear_size=model_args.linear_size,
+        init_temperature=model_args.init_temperature,
+        start_loss_weight=model_args.start_loss_weight,
+        end_loss_weight=model_args.end_loss_weight,
+        span_loss_weight=model_args.span_loss_weight,
+        threshold_loss_weight=model_args.threshold_loss_weight,
+        ner_loss_weight=model_args.ner_loss_weight,
+        class_frequencies = class_frequencies,
+    )
+    model = Binder(config)
 
     # Initialize our Trainer
     trainer = BinderTrainer(

@@ -61,6 +61,8 @@ def masked_log_softmax(vector: torch.Tensor, mask: torch.BoolTensor, dim: int = 
         # results in nans when the whole vector is masked.  We need a very small value instead of a
         # zero in the mask for these cases.
         vector = vector + (mask + tiny_value_of_dtype(vector.dtype)).log()
+
+    # this is (5), vector_i = log exp i / sum exp
     return torch.nn.functional.log_softmax(vector, dim=dim)
 
 
@@ -68,6 +70,7 @@ def contrastive_loss(
     scores: torch.FloatTensor,
     positions: Union[List[int], Tuple[List[int], List[int]], torch.Tensor, Tuple[torch.Tensor, torch.Tensor]],
     mask: torch.BoolTensor,
+    weights: torch.Tensor = None, 
     prob_mask: torch.BoolTensor = None,
 ) -> torch.FloatTensor:
     batch_size, seq_length = scores.size(0), scores.size(1)
@@ -80,14 +83,34 @@ def contrastive_loss(
         start_positions, end_positions = positions
         batch_indices = list(range(batch_size))
         log_probs = log_probs[batch_indices, start_positions, end_positions]
+
+        if isinstance(start_positions, torch.Tensor):
+            positive_log_probs = log_probs[torch.arange(batch_size, device=scores.device), start_positions, end_positions]
+        else:
+            indices = [batch_idx * seq_length * seq_length + start * seq_length + end for batch_idx, (start, end) in enumerate(zip(start_positions, end_positions))]
+            positive_log_probs = torch.gather(log_probs.view(batch_size, -1), 1, torch.tensor(indices, device=scores.device).unsqueeze(1)).squeeze(1)
+
     else:
         log_probs = masked_log_softmax(scores, mask)
         batch_indices = list(range(batch_size))
         log_probs = log_probs[batch_indices, positions]
-    
-    if prob_mask is not None:
-        log_probs = log_probs * prob_mask
-    return - log_probs.mean()
+
+        if isinstance(positions, torch.Tensor):
+            positive_log_probs = log_probs[torch.arange(batch_size, device=scores.device), positions]
+        else:
+            indices = [batch_idx * seq_length + pos for batch_idx, pos in enumerate(positions)]
+            positive_log_probs = torch.gather(log_probs.view(batch_size, -1), 1, torch.tensor(indices, device=scores.device).unsqueeze(1)).squeeze(1)
+
+    if weights is not None and weights.numel() > 0:
+        if weights.dim() == 1 and weights.size(0) == batch_size:
+            normalized_weights = weights / (weights.mean() + 1e-8)
+            loss = -(positive_log_probs * normalized_weights).sum() / (normalized_weights.sum() + 1e-8)
+        else:
+            loss = -positive_log_probs.mean()
+    else:
+        loss = -positive_log_probs.mean()
+
+    return loss
 
 
 @dataclass
@@ -131,6 +154,14 @@ class Binder(PreTrainedModel):
         self.start_logit_scale = torch.nn.Parameter(torch.ones([]) * np.log(1 / config.init_temperature))
         self.end_logit_scale = torch.nn.Parameter(torch.ones([]) * np.log(1 / config.init_temperature))
         self.span_logit_scale = torch.nn.Parameter(torch.ones([]) * np.log(1 / config.init_temperature))
+
+        if config.class_frequencies is not None:
+            class_frequencies = torch.tensor(config.class_frequencies, dtype=torch.float, device=self.device)
+            class_weights = 1.0 / (class_frequencies + 1e-8)
+            class_weights = class_weights / class_weights.sum() * len(class_frequencies)
+            self.register_buffer('class_weights', class_weights)
+        else:
+            self.class_weights = None
 
         self.start_loss_weight = config.start_loss_weight
         self.end_loss_weight = config.end_loss_weight
@@ -272,7 +303,8 @@ class Binder(PreTrainedModel):
         # num_types x hidden_size
         type_linear_output = F.normalize(self.dropout(self.type_span_linear(type_output)), dim=-1)
 
-        span_scores = self.span_logit_scale.exp() * type_linear_output.unsqueeze(0) @ span_linear_output.transpose(1, 2)
+        # sim(s_{i,j}, e_k) from (5); e_k is type_linear_output.unsqueeze(0), s_{i,j} is span_linear_output.transpose(1, 2) 
+        span_scores = self.span_logit_scale.exp() * type_linear_output.unsqueeze(0) @ span_linear_output.transpose(1, 2) 
         span_scores = span_scores.view(batch_size, num_types, seq_length, seq_length)
 
         total_loss = None
@@ -284,9 +316,9 @@ class Binder(PreTrainedModel):
             end_negative_mask = ner["end_negative_mask"].view(batch_size * num_types, seq_length)
             span_negative_mask = ner["span_negative_mask"].view(batch_size * num_types, seq_length, seq_length)
 
-            start_threshold_loss = contrastive_loss(flat_start_scores, 0, start_negative_mask)
-            end_threshold_loss = contrastive_loss(flat_end_scores, 0, end_negative_mask)
-            span_threshold_loss = contrastive_loss(flat_span_scores, (0, 0), span_negative_mask)
+            start_threshold_loss = contrastive_loss(flat_start_scores, [0], start_negative_mask)
+            end_threshold_loss = contrastive_loss(flat_end_scores, [0], end_negative_mask)
+            span_threshold_loss = contrastive_loss(flat_span_scores, ([0], [0]), span_negative_mask)
 
             threshold_loss = (
                 self.start_loss_weight * start_threshold_loss +
@@ -307,6 +339,12 @@ class Binder(PreTrainedModel):
                 # No valid spans in this batch, return zero loss
                 total_loss = torch.tensor(0.0, device=start_scores.device, requires_grad=True)
             else:
+
+                if self.class_weights is not None and len(span_type_ids) > 0:
+                    example_weights = self.class_weights[span_type_ids]
+                else:
+                    example_weights = None
+
                 # Use a simpler loop-based approach to avoid CUDA device-side asserts
                 start_scores_pos = []
                 end_scores_pos = []
@@ -319,8 +357,7 @@ class Binder(PreTrainedModel):
                     start_scores_pos.append(start_scores[0, batch_idx, type_idx])
                     end_scores_pos.append(end_scores[0, batch_idx, type_idx])
                     # span_scores has shape [batch_size, num_types, seq_length, seq_length] (no extra batch dim)
-                    span_tensor = span_scores[batch_idx, type_idx]
-                    span_scores_pos.append(span_tensor)
+                    span_scores_pos.append(span_scores[0, batch_idx, type_idx])
                 
                 start_scores_pos = torch.stack(start_scores_pos)
                 end_scores_pos = torch.stack(end_scores_pos)
@@ -338,9 +375,9 @@ class Binder(PreTrainedModel):
                 if ner_span_masks.shape != span_scores_pos.shape:
                     raise ValueError(f"Span mask shape {ner_span_masks.shape} doesn't match scores shape {span_scores_pos.shape}")
 
-                start_loss = contrastive_loss(start_scores_pos, ner_starts_tensor, ner_start_masks)
-                end_loss = contrastive_loss(end_scores_pos, ner_ends_tensor, ner_end_masks)
-                span_loss = contrastive_loss(span_scores_pos, (ner_starts_tensor, ner_ends_tensor), ner_span_masks)
+                start_loss = contrastive_loss(start_scores_pos, ner_starts_tensor, ner_start_masks, example_weights)
+                end_loss = contrastive_loss(end_scores_pos, ner_ends_tensor, ner_end_masks, example_weights)
+                span_loss = contrastive_loss(span_scores_pos, (ner_starts_tensor, ner_ends_tensor), ner_span_masks, example_weights)
 
                 total_loss = (
                     self.start_loss_weight * start_loss +

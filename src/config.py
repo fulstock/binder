@@ -19,6 +19,7 @@ class BinderConfig(PretrainedConfig):
         span_loss_weight=0.6,
         threshold_loss_weight=0.5,
         ner_loss_weight=0.5,
+        class_frequencies = None,
     ):
         self.pretrained_model_name_or_path=pretrained_model_name_or_path
         self.cache_dir=cache_dir
@@ -45,3 +46,4 @@ class BinderConfig(PretrainedConfig):
         self.span_loss_weight = span_loss_weight
         self.threshold_loss_weight = threshold_loss_weight
         self.ner_loss_weight = ner_loss_weight
+        self.class_frequencies = class_frequencies
