@@ -1,0 +1,162 @@
+{"dataset": "nerel-bio-fix", "name": "ACTIVITY", "description": "ACTIVITY", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "ADMINISTRATION_ROUTE", "description": "ADMINISTRATION_ROUTE", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "AGE", "description": "AGE", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "ANATOMY", "description": "ANATOMY", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "CHEM", "description": "CHEM", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "CITY", "description": "CITY", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "COUNTRY", "description": "COUNTRY", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "DATE", "description": "DATE", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "DEVICE", "description": "DEVICE", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "DISO", "description": "DISO", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "DISTRICT", "description": "DISTRICT", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "EVENT", "description": "EVENT", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "FACILITY", "description": "FACILITY", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "FAMILY", "description": "FAMILY", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "FINDING", "description": "FINDING", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "FOOD", "description": "FOOD", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "GENE", "description": "GENE", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "HEALTH_CARE_ACTIVITY", "description": "HEALTH_CARE_ACTIVITY", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "INJURY_POISONING", "description": "INJURY_POISONING", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "LABPROC", "description": "LABPROC", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "LIVB", "description": "LIVB", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "LOCATION", "description": "LOCATION", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "MEDPROC", "description": "MEDPROC", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "MENTALPROC", "description": "MENTALPROC", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "MONEY", "description": "MONEY", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "NATIONALITY", "description": "NATIONALITY", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "NUMBER", "description": "NUMBER", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "ORDINAL", "description": "ORDINAL", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "ORGANIZATION", "description": "ORGANIZATION", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "PERCENT", "description": "PERCENT", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "PERSON", "description": "PERSON", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "PHYS", "description": "PHYS", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "PRODUCT", "description": "PRODUCT", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "PROFESSION", "description": "PROFESSION", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "SCIPROC", "description": "SCIPROC", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "STATE_OR_PROVINCE", "description": "STATE_OR_PROVINCE", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-fix", "name": "TIME", "description": "TIME", "description_source": "Keyword prompt"}
+{"dataset": "casie-nugs-binderjson", "name": "Databreach", "description": "Databreach", "description_source": "Keyword prompt"}
+{"dataset": "casie-nugs-binderjson", "name": "Phishing", "description": "Phishing", "description_source": "Keyword prompt"}
+{"dataset": "casie-nugs-binderjson", "name": "Ransom", "description": "Ransom", "description_source": "Keyword prompt"}
+{"dataset": "casie-nugs-binderjson", "name": "DiscoverVulnerability", "description": "DiscoverVulnerability", "description_source": "Keyword prompt"}
+{"dataset": "casie-nugs-binderjson", "name": "PatchVulnerability", "description": "PatchVulnerability", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-new", "name": "ANATOMY", "description": "ANATOMY", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-new", "name": "CHEM", "description": "CHEM", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-new", "name": "DEVICE", "description": "DEVICE", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-new", "name": "DISO", "description": "DISO", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-new", "name": "FINDING", "description": "FINDING", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-new", "name": "INJURY_POISONING", "description": "INJURY_POISONING", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-new", "name": "LABPROC", "description": "LABPROC", "description_source": "Keyword prompt"}
+{"dataset": "nerel-bio-new", "name": "PHYS", "description": "PHYS", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "AGE", "description": "AGE", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "AWARD", "description": "AWARD", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "CITY", "description": "CITY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "COUNTRY", "description": "COUNTRY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "CRIME", "description": "CRIME", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "DATE", "description": "DATE", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "DISEASE", "description": "DISEASE", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "DISTRICT", "description": "DISTRICT", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "EVENT", "description": "EVENT", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "FACILITY", "description": "FACILITY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "FAMILY", "description": "FAMILY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "IDEOLOGY", "description": "IDEOLOGY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "LANGUAGE", "description": "LANGUAGE", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "LAW", "description": "LAW", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "LOCATION", "description": "LOCATION", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "MONEY", "description": "MONEY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "NATIONALITY", "description": "NATIONALITY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "NUMBER", "description": "NUMBER", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "ORDINAL", "description": "ORDINAL", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "ORGANIZATION", "description": "ORGANIZATION", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "PERCENT", "description": "PERCENT", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "PERSON", "description": "PERSON", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "PENALTY", "description": "PENALTY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "PRODUCT", "description": "PRODUCT", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "PROFESSION", "description": "PROFESSION", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "RELIGION", "description": "RELIGION", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "STATE_OR_PROVINCE", "description": "STATE_OR_PROVINCE", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "TIME", "description": "TIME", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-binder", "name": "WORK_OF_ART", "description": "WORK_OF_ART", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "AGE", "description": "AGE", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "AWARD", "description": "AWARD", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "CITY", "description": "CITY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "COUNTRY", "description": "COUNTRY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "CRIME", "description": "CRIME", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "DATE", "description": "DATE", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "DISEASE", "description": "DISEASE", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "DISTRICT", "description": "DISTRICT", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "EVENT", "description": "EVENT", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "FACILITY", "description": "FACILITY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "FAMILY", "description": "FAMILY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "IDEOLOGY", "description": "IDEOLOGY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "LANGUAGE", "description": "LANGUAGE", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "LAW", "description": "LAW", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "LOCATION", "description": "LOCATION", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "MONEY", "description": "MONEY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "NATIONALITY", "description": "NATIONALITY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "NUMBER", "description": "NUMBER", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "ORDINAL", "description": "ORDINAL", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "ORGANIZATION", "description": "ORGANIZATION", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "PERCENT", "description": "PERCENT", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "PERSON", "description": "PERSON", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "PENALTY", "description": "PENALTY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "PRODUCT", "description": "PRODUCT", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "PROFESSION", "description": "PROFESSION", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "RELIGION", "description": "RELIGION", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "STATE_OR_PROVINCE", "description": "STATE_OR_PROVINCE", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "TIME", "description": "TIME", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-binder", "name": "WORK_OF_ART", "description": "WORK_OF_ART", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "AGE", "description": "AGE", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "AWARD", "description": "AWARD", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "CITY", "description": "CITY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "COUNTRY", "description": "COUNTRY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "CRIME", "description": "CRIME", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "DATE", "description": "DATE", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "DISEASE", "description": "DISEASE", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "DISTRICT", "description": "DISTRICT", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "EVENT", "description": "EVENT", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "FACILITY", "description": "FACILITY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "FAMILY", "description": "FAMILY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "IDEOLOGY", "description": "IDEOLOGY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "LANGUAGE", "description": "LANGUAGE", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "LAW", "description": "LAW", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "LOCATION", "description": "LOCATION", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "MONEY", "description": "MONEY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "NATIONALITY", "description": "NATIONALITY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "NUMBER", "description": "NUMBER", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "ORDINAL", "description": "ORDINAL", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "ORGANIZATION", "description": "ORGANIZATION", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "PERCENT", "description": "PERCENT", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "PERSON", "description": "PERSON", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "PENALTY", "description": "PENALTY", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "PRODUCT", "description": "PRODUCT", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "PROFESSION", "description": "PROFESSION", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "RELIGION", "description": "RELIGION", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "STATE_OR_PROVINCE", "description": "STATE_OR_PROVINCE", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "TIME", "description": "TIME", "description_source": "Keyword prompt"}
+{"dataset": "NEREL-outerflat-winc-binder", "name": "WORK_OF_ART", "description": "WORK_OF_ART", "description_source": "Keyword prompt"}
+{"dataset": "seccol_events_texts_1500_new", "name" : "ATTACK", "description": "ATTACK", "description_source" : "Keyword prompt"}
+{"dataset": "seccol_events_texts_1500_new", "name" : "DAMAGE", "description": "DAMAGE", "description_source" : "Keyword prompt"}
+{"dataset": "seccol_events_texts_1500_new", "name" : "DEVICE", "description": "DEVICE", "description_source" : "Keyword prompt"}
+{"dataset": "seccol_events_texts_1500_new", "name" : "DISCOVER_VULNERABILITY", "description": "DISCOVER_VULNERABILITY", "description_source" : "Keyword prompt"}
+{"dataset": "seccol_events_texts_1500_new", "name" : "FILE", "description": "FILE", "description_source" : "Keyword prompt"}
+{"dataset": "seccol_events_texts_1500_new", "name" : "GPE", "description": "GPE", "description_source" : "Keyword prompt"}
+{"dataset": "seccol_events_texts_1500_new", "name" : "HACKER", "description": "HACKER", "description_source" : "Keyword prompt"}
+{"dataset": "seccol_events_texts_1500_new", "name" : "HACKER_GROUP", "description": "HACKER_GROUP", "description_source" : "Keyword prompt"}
+{"dataset": "seccol_events_texts_1500_new", "name" : "INFOSOURCE", "description": "INFOSOURCE", "description_source" : "Keyword prompt"}
+{"dataset": "seccol_events_texts_1500_new", "name" : "MALWARE", "description": "MALWARE", "description_source" : "Keyword prompt"}
+{"dataset": "seccol_events_texts_1500_new", "name" : "MONEY", "description": "MONEY", "description_source" : "Keyword prompt"}
+{"dataset": "seccol_events_texts_1500_new", "name" : "ORGANIZATION", "description": "ORGANIZATION", "description_source" : "Keyword prompt"}
+{"dataset": "seccol_events_texts_1500_new", "name" : "PATCH_VULNERABILITY", "description": "PATCH_VULNERABILITY", "description_source" : "Keyword prompt"}
+{"dataset": "seccol_events_texts_1500_new", "name" : "PERSON", "description": "PERSON", "description_source" : "Keyword prompt"}
+{"dataset": "seccol_events_texts_1500_new", "name" : "PROGRAM_SYSTEM", "description": "PROGRAM_SYSTEM", "description_source" : "Keyword prompt"}
+{"dataset": "seccol_events_texts_1500_new", "name" : "PROTECTION", "description": "PROTECTION", "description_source" : "Keyword prompt"}
+{"dataset": "seccol_events_texts_1500_new", "name" : "SPECIALIST", "description": "SPECIALIST", "description_source" : "Keyword prompt"}
+{"dataset": "seccol_events_texts_1500_new", "name" : "TIME", "description": "TIME", "description_source" : "Keyword prompt"}
+{"dataset": "seccol_events_texts_1500_new", "name" : "VULNERABILITY", "description": "VULNERABILITY", "description_source" : "Keyword prompt"}
+{"dataset": "seccol_events_texts_1500_new", "name" : "WEBSITE", "description": "WEBSITE", "description_source" : "Keyword prompt"}
+{"dataset": "GENIA-binder", "name" : "DNA", "description": "DNA", "description_source" : "Keyword prompt"}
+{"dataset": "GENIA-binder", "name" : "RNA", "description": "RNA", "description_source" : "Keyword prompt"}
+{"dataset": "GENIA-binder", "name" : "cell_line", "description": "cell_line", "description_source" : "Keyword prompt"}
+{"dataset": "GENIA-binder", "name" : "cell_type", "description": "cell_type", "description_source" : "Keyword prompt"}
+{"dataset": "GENIA-binder", "name" : "protein", "description": "protein", "description_source" : "Keyword prompt"}

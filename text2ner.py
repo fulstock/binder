@@ -1087,7 +1087,7 @@ def stream_batch_prediction_demo():
     # Configuration
     inference_config_path = "./conf/inference/inference-config-optimized.json"
     dataset_path = "/home/student1/data/seccol_NEREL-attack/test"
-    predicted_dataset_path = "/home/student1/data/seccol_NEREL-attack/test_predicted6"
+    predicted_dataset_path = "/home/student1/data/seccol_NEREL-attack/test_predicted8"
     BATCH_SIZE = 16
     
     print(f"Dataset path: {dataset_path}")
@@ -1272,7 +1272,7 @@ if __name__ == "__main__":
     print(f"\n Loading gold annotations...")
     
     dataset_path = "/home/student1/data/seccol_NEREL-attack/test"
-    predicted_dataset_path = "/home/student1/data/seccol_NEREL-attack/test_predicted6"
+    predicted_dataset_path = "/home/student1/data/seccol_NEREL-attack/test_predicted8"
     
     # Load gold annotations
     for root, dirs, files in os.walk(dataset_path):

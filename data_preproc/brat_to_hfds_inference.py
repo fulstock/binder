@@ -17,6 +17,7 @@ word_tokenizer = NLTKWordTokenizer()
 
 brat2mrc_parser = argparse.ArgumentParser(description = "Brat to hfds-json formatter script.")
 brat2mrc_parser.add_argument('--brat_dataset_path', type = str, required = True, help = "Path to brat dataset (with train, dev, test dirs).")
+brat2mrc_parser.add_argument('--tags_path', type = str, required = True, help = 'Path to tags file with format ["CLASS1", "CLASS2", ...].')
 brat2mrc_parser.add_argument('--hfds_output_path', type = str, default = None, help = "Path, where formatted dataset would be stored. By default, same path as in --brat_dataset_path would be used.")
 
 args = brat2mrc_parser.parse_args()
@@ -27,6 +28,13 @@ hfds_output_path = args.hfds_output_path
 if hfds_output_path is None:
     hfds_output_path = brat_dataset_path
 
+tags_path = args.tags_path
+
+with open(tags_path, "r") as tags_file:
+    tags = json.loads(tags_file.read())
+
+print(tags)
+
 jsonpath = os.path.join(hfds_output_path, "test.json")
 dataset_path = brat_dataset_path
 
@@ -35,7 +43,7 @@ jsondir = os.path.dirname(jsonpath)
 if not os.path.exists(jsondir):
     os.makedirs(jsondir)
 
-jsonfile = open(jsonpath, "w", encoding='UTF-8', newline = "") 
+jsonfile = open(jsonpath, "w", encoding='UTF-8') 
 
 doc_count = 0
 doc_ids = []
@@ -49,7 +57,7 @@ for ad, dirs, files in os.walk(dataset_path):
                 if os.stat(dataset_path + '/' + f).st_size == 0:
                     continue
 
-                txtfile = open(dataset_path + '/' + f, "r", encoding='UTF-8')
+                txtfile = open(dataset_path + '/' + f, "r", encoding='CP1251')
                 txtdata = txtfile.read()
                 txtfile.close()
 
@@ -82,7 +90,7 @@ for ad, dirs, files in os.walk(dataset_path):
                 doc_count += 1
                 doc_ids.append(f[:-4])
 
-                print(json.dumps(doc_entities, ensure_ascii = False), file = jsonfile)
+                jsonfile.write(json.dumps(doc_entities, ensure_ascii = False) + '\n')
 
             except FileNotFoundError:
                 pass

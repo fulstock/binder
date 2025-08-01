@@ -580,131 +580,102 @@ if __name__ == "__main__":
 
     # --- CONFIGURABLE PATHS -------------------------------------------------
     # You can override these via environment variables if needed.
-    inference_config_path   = os.getenv("T2N_INFERENCE_CFG",  "./conf/inference/text2ner/inference-config.json")
-    dataset_path           = os.getenv("T2N_DATASET_PATH",   "../data/seccol/seccol_events_texts_1500_new2-div/test")
-    predicted_dataset_path = os.getenv("T2N_PRED_OUT",       "../data/seccol/seccol_events_texts_1500_new2-div/test_predicted/")
+    inference_config_path   = os.getenv("T2N_INFERENCE_CFG",  "./conf/inference/text2ner-nerel/inference-config.json")
+    dataset_path           = os.getenv("T2N_DATASET_PATH",   "/home/student1/data/NEREL1.1/dev")
+    predicted_dataset_path = os.getenv("T2N_PRED_OUT",       "/home/student1/data/NEREL1.1/dev_predicted")
 
     # Ensure the output directory exists
     Path(predicted_dataset_path).mkdir(parents=True, exist_ok=True)
 
     inf = BinderInference(config_path=inference_config_path)
 
-    text2pred = {}
-
     dataset_path = Path(dataset_path)
 
-    # -------------------- PROCESS TXT FILES --------------------------------
-    txt_files = sorted(dataset_path.rglob("*.txt"))
-    for txt_file in tqdm(txt_files, desc="Predicting"):
-        text = txt_file.read_text(encoding="utf-8")
-        preds = inf.predict(text)
-
-        fname = txt_file.name
-        if fname not in text2pred:
-            text2pred[fname] = {"text": text, "preds": preds}
-        else:
-            # Preserve / merge existing golds if they were read earlier
-            text2pred[fname]["text"] = text
-            if "golds" in text2pred[fname]:
-                text2pred[fname]["golds"] = [
-                    (s, e, t, text[s:e]) for s, e, t in text2pred[fname]["golds"]
-                ]
-            text2pred[fname]["preds"] = preds
-
-    # -------------------- PROCESS ANN FILES --------------------------------
-    ann_files = sorted(dataset_path.rglob("*.ann"))
-    for ann_path in tqdm(ann_files, desc="Reading annotations"):
-        with ann_path.open("r", encoding="utf-8") as annfile:
-            golds = []
-            for line in annfile:
-                parts = line.split()
-                if len(parts) > 3 and parts[0].startswith("T"):
-                    try:
-                        entity_type = parts[1]
-                        start_char = int(parts[2])
-                        end_char = int(parts[3])
-                        tags.add(entity_type)
-                        golds.append((start_char, end_char, entity_type))
-                    except ValueError:
-                        # Skip malformed annotation lines
-                        continue
-
-        txt_fname = ann_path.with_suffix(".txt").name
-        if txt_fname not in text2pred:
-            text2pred[txt_fname] = {"golds": golds}
-        else:
-            text = text2pred[txt_fname]["text"]
-            text2pred[txt_fname]["golds"] = [(s, e, t, text[s:e]) for s, e, t in golds]
-
-    # print(list(text2pred.values())[0])
-
+    # -------------------- METRIC HELPERS -----------------------------------
     def compute_tp_fn_fp(predictions, labels):
-        # tp, fn, fp
-        if len(predictions) == 0:
+        if not predictions:
             return {"tp": 0, "fn": len(labels), "fp": 0}
-        if len(labels) == 0:
+        if not labels:
             return {"tp": 0, "fn": 0, "fp": len(predictions)}
         tp = len(predictions & labels)
         fn = len(labels) - tp
         fp = len(predictions) - tp
         return {"tp": tp, "fn": fn, "fp": fp}
 
-
     def compute_precision_recall_f1(tp, fn, fp):
         if tp + fp + fn == 0:
             return {"precision": 0.0, "recall": 0.0, "f1": 0.0}
-        if tp + fp == 0:
-            return {"precision": 0.0, "recall": .0, "f1": .0}
-        if tp + fn == 0:
-            return {"precision": .0, "recall": 0.0, "f1": .0}
-        precision = tp / (tp + fp)
-        recall = tp / (tp + fn)
-        f1 = 2 * tp / (2 * tp + fp + fn)
+        precision = tp / (tp + fp) if (tp + fp) else 0.0
+        recall    = tp / (tp + fn) if (tp + fn) else 0.0
+        f1        = 2 * tp / (2 * tp + fp + fn) if (tp + fp + fn) else 0.0
         return {"precision": precision, "recall": recall, "f1": f1}
 
-    metrics = {}
-    for tag in tags:
-        metrics[tag] = {"tp" : 0, "fp" : 0, "fn" : 0}
-    metrics["total"] = {"tp" : 0, "fp" : 0, "fn" : 0}
-    for file in text2pred.keys():
-        # print(text2pred[file])
-        # print(file)
-        try:
-            golds = set(text2pred[file]["golds"])
-            preds = set(text2pred[file]["preds"])
-        except KeyError:
-            print(file)
-            continue
+    metrics = {"total": {"tp": 0, "fp": 0, "fn": 0}}
 
-        # print(sorted(list(golds)))
-        # print(sorted(list(preds)))
+    # -------------------- MAIN LOOP ----------------------------------------
+    txt_files = sorted(dataset_path.rglob("*.txt"))
+    for txt_path in tqdm(txt_files, desc="Predicting & Scoring"):
+        text = txt_path.read_text(encoding="utf-8")
+        preds = inf.predict(text)
 
-        with open(predicted_dataset_path + file, "w", encoding = "UTF-8") as tf:
-            tf.write(text2pred[file]["text"])
+        # Convert preds to set for metric calc
+        pred_set = set(preds)
 
-        with open(predicted_dataset_path + file.replace('.txt','.ann'), "w", encoding = "UTF-8") as af:
-            for p_idx, p in enumerate(sorted(list(preds))):
-                s, e, t, sp = p
-                af.write("T" + str(p_idx + 1) + "\t" + t + " " + str(s) + " " + str(e) + "\t" + sp + "\n")
+        # Corresponding golds (if any)
+        ann_path = txt_path.with_suffix(".ann")
+        golds = []
+        if ann_path.exists():
+            with ann_path.open("r", encoding="utf-8") as annfile:
+                for line in annfile:
+                    parts = line.split()
+                    if len(parts) > 3 and parts[0].startswith("T"):
+                        try:
+                            entity_type = parts[1]
+                            start_char  = int(parts[2])
+                            end_char    = int(parts[3])
+                            tags.add(entity_type)
+                            golds.append((start_char, end_char, entity_type))
+                        except ValueError:
+                            continue
 
-        ts = compute_tp_fn_fp(preds, golds)
-        tp, fn, fp = ts["tp"], ts["fn"], ts["fp"]
-        metrics["total"]["tp"] += tp
-        metrics["total"]["fp"] += fp
-        metrics["total"]["fn"] += fn
+        gold_set = set((s, e, t) for s, e, t in golds)
 
-        for tag in tags:
-            tagged_golds = set([g for g in golds if g[2] == tag])
-            tagged_preds = set([p for p in preds if p[2] == tag])
-            tagged_ts = compute_tp_fn_fp(tagged_preds, tagged_golds)
-            tagged_tp, tagged_fp, tagged_fn = tagged_ts["tp"], tagged_ts["fn"], tagged_ts["fp"]
-            metrics[tag]["tp"] += tagged_tp
-            metrics[tag]["fp"] += tagged_fp
-            metrics[tag]["fn"] += tagged_fn
+        # ---- WRITE PREDICTED TEXT & ANN -----------------------------------
+        out_txt = Path(predicted_dataset_path) / txt_path.name
+        out_ann = out_txt.with_suffix(".ann")
 
-    metrics["total"] = {**metrics["total"], **compute_precision_recall_f1(metrics["total"]["tp"], metrics["total"]["fn"], metrics["total"]["fp"])}
-    for tag in tags:
-        metrics[tag] = {**metrics[tag], **compute_precision_recall_f1(metrics[tag]["tp"], metrics[tag]["fn"], metrics[tag]["fp"])}
+        out_txt.write_text(text, encoding="utf-8")
+        with out_ann.open("w", encoding="utf-8") as af:
+            for idx, (s, e, t, span) in enumerate(sorted(preds)):
+                af.write(f"T{idx+1}\t{t} {s} {e}\t{span}\n")
+
+        # ---- UPDATE METRICS ----------------------------------------------
+        ts = compute_tp_fn_fp(pred_set, gold_set)
+        metrics["total"]["tp"] += ts["tp"]
+        metrics["total"]["fp"] += ts["fp"]
+        metrics["total"]["fn"] += ts["fn"]
+
+        for entity_type in tags:
+            if entity_type not in metrics:
+                metrics[entity_type] = {"tp": 0, "fp": 0, "fn": 0}
+
+        for t in tags:
+            tagged_golds = set(g for g in gold_set if g[2] == t)
+            tagged_preds = set(p for p in pred_set if p[2] == t)
+            ts_tag = compute_tp_fn_fp(tagged_preds, tagged_golds)
+            metrics[t]["tp"] += ts_tag["tp"]
+            metrics[t]["fp"] += ts_tag["fp"]
+            metrics[t]["fn"] += ts_tag["fn"]
+
+    # -------------------- FINAL METRIC CALC -------------------------------
+    metrics["total"].update(
+        compute_precision_recall_f1(metrics["total"]["tp"], metrics["total"]["fn"], metrics["total"]["fp"])
+    )
+
+    for t in tags:
+        metrics[t].update(
+            compute_precision_recall_f1(metrics[t]["tp"], metrics[t]["fn"], metrics[t]["fp"])
+        )
 
     print(metrics)
         

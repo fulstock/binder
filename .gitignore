@@ -20,6 +20,15 @@ sergey-requirements-windows.txt
 mono_crash.*
 
 data/*
+wandb/*
+myvenv/*
+myvenv310/*
+sergey_venv/*
+logs/*
+checkpoints/*
+seccol-binder/*
+sergey/*
+*.bin
 
 # Build results
 [Dd]ebug/

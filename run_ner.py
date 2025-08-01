@@ -537,6 +537,15 @@ def main():
         train_dataset = raw_datasets["train"]
         if data_args.shuffle_seed:
             train_dataset = train_dataset.shuffle(seed = data_args.shuffle_seed)
+            if len(train_dataset) > 1:
+                shuffled_indices = train_dataset._indices
+                if not isinstance(shuffled_indices, list):
+                    shuffled_indices = shuffled_indices.to_pylist()
+                if shuffled_indices == list(range(len(train_dataset))):
+                    raise AssertionError(
+                        "Dataset was not shuffled! Indices match original order. "
+                        "Check shuffle implementation or dataset size."
+                    )
 
         if data_args.max_train_samples is not None:
             # We will select sample from whole data if argument is specified
