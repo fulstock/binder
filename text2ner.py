@@ -1086,8 +1086,8 @@ def stream_batch_prediction_demo():
     
     # Configuration
     inference_config_path = "./conf/inference/inference-config-optimized.json"
-    dataset_path = "/home/student1/data/seccol_NEREL-attack/test"
-    predicted_dataset_path = "/home/student1/data/seccol_NEREL-attack/test_predicted8"
+    dataset_path = "/home/student1/data/100texts/raw"
+    predicted_dataset_path = "/home/student1/data/100texts/ner_predicted"
     BATCH_SIZE = 16
     
     print(f"Dataset path: {dataset_path}")
@@ -1165,7 +1165,7 @@ def stream_batch_prediction_demo():
         
         for file_path in batch_files:
             try:
-                with open(file_path, "r", encoding="UTF-8") as tf:
+                with open(file_path, "r", encoding="cp1251") as tf:
                     text = tf.read().strip()
                     # Skip empty files
                     if text:  
@@ -1271,8 +1271,8 @@ if __name__ == "__main__":
     # Original evaluation logic (kept for compatibility)
     print(f"\n Loading gold annotations...")
     
-    dataset_path = "/home/student1/data/seccol_NEREL-attack/test"
-    predicted_dataset_path = "/home/student1/data/seccol_NEREL-attack/test_predicted8"
+    dataset_path = "/home/student1/data/100texts/raw"
+    predicted_dataset_path = "/home/student1/data/100texts/ner_predicted"
     
     # Load gold annotations
     for root, dirs, files in os.walk(dataset_path):
@@ -1302,7 +1302,7 @@ if __name__ == "__main__":
                     print(f"  Error reading annotation file {f}: {e}")
                     traceback.print_exc()
 
-    # print(list(text2pred.values())[0])
+    # print(list(text2pred.keys()))
 
     def compute_tp_fn_fp(predictions, labels):
         # tp, fn, fp
@@ -1332,15 +1332,20 @@ if __name__ == "__main__":
     for tag in tags:
         metrics[tag] = {"tp" : 0, "fp" : 0, "fn" : 0}.copy()
 
-    metrics["total"] = {"tp" : 0, "fp" : 0, "fn" : 0}.copy()
+    metrics["micro"] = {"tp" : 0, "fp" : 0, "fn" : 0}.copy()
+    metrics["macro"] = {"precision": 0.0, "recall": 0.0, "f1": 0.0}.copy()
     for file in text2pred.keys():
-        # print(text2pred[file])
-        # print(file)
+        print(text2pred[file])
+        print(file)
         try:
             # Convert to (start,end,type) triples for comparison to avoid textual mismatches
-            golds = set((s, e, t) for (s, e, t, *_unused) in text2pred[file]["golds"])
+            if "golds" in text2pred[file]:
+                golds = set((s, e, t) for (s, e, t, *_unused) in text2pred[file]["golds"])
             preds = set((s, e, t) for (s, e, t, *_unused) in text2pred[file]["preds"])
         except KeyError:
+            if "golds" in text2pred[file]:
+                print("golds", text2pred[file]["golds"])
+            print("preds", text2pred[file]["preds"])
             print(file)
             continue
 
@@ -1348,9 +1353,11 @@ if __name__ == "__main__":
         # print(sorted(list(preds)))
 
         with open(os.path.join(predicted_dataset_path, file), "w", encoding = "UTF-8") as tf:
+            print("Writing text of file", file, "into", os.path.join(predicted_dataset_path, file))
             tf.write(text2pred[file]["text"])
 
         with open(os.path.join(predicted_dataset_path, file.replace('.txt','.ann')), "w", encoding = "UTF-8") as af:
+            print("Writing ner perds of file", file.replace('.txt','.ann'), "into", os.path.join(predicted_dataset_path, file.replace('.txt','.ann')))
             for p_idx, p in enumerate(sorted(list(preds))):
                 # Handle both (s,e,t) and (s,e,t,text) formats
                 if len(p) == 3:
@@ -1360,94 +1367,89 @@ if __name__ == "__main__":
                     s, e, t, sp = p
                 af.write("T" + str(p_idx + 1) + "\t" + t + " " + str(s) + " " + str(e) + "\t" + sp + "\n")
 
-        ts = compute_tp_fn_fp(preds, golds)
-        tp, fn, fp = ts["tp"], ts["fn"], ts["fp"]
-        metrics["total"]["tp"] += tp
-        metrics["total"]["fp"] += fp
-        metrics["total"]["fn"] += fn
+        if "golds" in text2pred[file]:
+            ts = compute_tp_fn_fp(preds, golds)
+            tp, fn, fp = ts["tp"], ts["fn"], ts["fp"]
+            metrics["micro"]["tp"] += tp
+            metrics["micro"]["fp"] += fp
+            metrics["micro"]["fn"] += fn
 
+            for tag in tags:
+                # Convert back to original format for tag filtering
+                original_golds = text2pred[file]["golds"]
+                original_preds = text2pred[file]["preds"]
+                
+                tagged_golds = set((s, e, t) for (s, e, t, *_unused) in original_golds if t == tag)
+                tagged_preds = set((s, e, t) for (s, e, t, *_unused) in original_preds if t == tag)
+                tagged_ts = compute_tp_fn_fp(tagged_preds, tagged_golds)
+                tagged_tp, tagged_fp, tagged_fn = tagged_ts["tp"], tagged_ts["fp"], tagged_ts["fn"]
+                metrics[tag]["tp"] += tagged_tp
+                metrics[tag]["fp"] += tagged_fp
+                metrics[tag]["fn"] += tagged_fn
+
+    if "golds" in text2pred[file]:
+        metrics["micro"] = {**metrics["micro"], **compute_precision_recall_f1(metrics["micro"]["tp"], metrics["micro"]["fn"], metrics["micro"]["fp"])}
         for tag in tags:
-            # Convert back to original format for tag filtering
+            metrics[tag] = {**metrics[tag], **compute_precision_recall_f1(metrics[tag]["tp"], metrics[tag]["fn"], metrics[tag]["fp"])}
+        metrics["macro"]["precision"] = sum([metrics[tag]["precision"] for tag in tags]) / len(tags) if len(tags) > 0 else 0.0
+        metrics["macro"]["recall"] = sum([metrics[tag]["recall"] for tag in tags]) / len(tags) if len(tags) > 0 else 0.0
+        metrics["macro"]["f1"] = sum([metrics[tag]["f1"] for tag in tags]) / len(tags) if len(tags) > 0 else 0.0
+
+        for tag in sorted(list(tags)):
+            print(tag, metrics[tag]["tp"], metrics[tag]["fp"], metrics[tag]["fn"], metrics[tag]["precision"], metrics[tag]["recall"], metrics[tag]["f1"])
+        print("total", metrics["micro"]["tp"], metrics["micro"]["fp"], metrics["micro"]["fn"])
+        print("micro", metrics["micro"]["precision"], metrics["micro"]["recall"], metrics["micro"]["f1"])
+        print("macro", metrics["macro"]["precision"], metrics["macro"]["recall"], metrics["macro"]["f1"])
+        
+        # Detailed error analysis for problematic classes
+        print("\n" + "="*80)
+        print("DETAILED ERROR ANALYSIS")
+        print("="*80)
+        
+        # Find classes with poor performance (F1 < 0.3 or recall < 0.3)
+        problematic_classes = []
+        for tag in tags:
+            f1 = metrics[tag]["f1"]
+            recall = metrics[tag]["recall"]
+            if f1 < 0.3 or recall < 0.3:
+                problematic_classes.append(tag)
+        
+        print(f"Analyzing {len(problematic_classes)} problematic classes with F1 < 0.3 or recall < 0.3:")
+        print(f"Classes: {', '.join(problematic_classes[:10])}{'...' if len(problematic_classes) > 10 else ''}")
+        
+        # Collect all predictions and golds by class for analysis
+        class_predictions = {tag: [] for tag in problematic_classes}
+        class_golds = {tag: [] for tag in problematic_classes}
+        
+        for file in text2pred.keys():
+            if "golds" not in text2pred[file] or "preds" not in text2pred[file]:
+                continue
+                
             original_golds = text2pred[file]["golds"]
             original_preds = text2pred[file]["preds"]
+            file_text = text2pred[file]["text"]
             
-            tagged_golds = set((s, e, t) for (s, e, t, *_unused) in original_golds if t == tag)
-            tagged_preds = set((s, e, t) for (s, e, t, *_unused) in original_preds if t == tag)
-            tagged_ts = compute_tp_fn_fp(tagged_preds, tagged_golds)
-            tagged_tp, tagged_fp, tagged_fn = tagged_ts["tp"], tagged_ts["fp"], tagged_ts["fn"]
-            metrics[tag]["tp"] += tagged_tp
-            metrics[tag]["fp"] += tagged_fp
-            metrics[tag]["fn"] += tagged_fn
-
-    metrics["total"] = {**metrics["total"], **compute_precision_recall_f1(metrics["total"]["tp"], metrics["total"]["fn"], metrics["total"]["fp"])}
-    for tag in tags:
-        metrics[tag] = {**metrics[tag], **compute_precision_recall_f1(metrics[tag]["tp"], metrics[tag]["fn"], metrics[tag]["fp"])}
-
-    print(metrics)
-    
-    # Detailed error analysis for problematic classes
-    print("\n" + "="*80)
-    print("DETAILED ERROR ANALYSIS")
-    print("="*80)
-    
-    # Find classes with poor performance (F1 < 0.3 or recall < 0.3)
-    problematic_classes = []
-    for tag in tags:
-        f1 = metrics[tag]["f1"]
-        recall = metrics[tag]["recall"]
-        if f1 < 0.3 or recall < 0.3:
-            problematic_classes.append(tag)
-    
-    print(f"Analyzing {len(problematic_classes)} problematic classes with F1 < 0.3 or recall < 0.3:")
-    print(f"Classes: {', '.join(problematic_classes[:10])}{'...' if len(problematic_classes) > 10 else ''}")
-    
-    # Collect all predictions and golds by class for analysis
-    class_predictions = {tag: [] for tag in problematic_classes}
-    class_golds = {tag: [] for tag in problematic_classes}
-    
-    for file in text2pred.keys():
-        if "golds" not in text2pred[file] or "preds" not in text2pred[file]:
-            continue
+            # Group by class
+            for s, e, t, text_span in original_golds:
+                if t in problematic_classes:
+                    class_golds[t].append((file, s, e, text_span, file_text))
             
-        original_golds = text2pred[file]["golds"]
-        original_preds = text2pred[file]["preds"]
-        file_text = text2pred[file]["text"]
+            for s, e, t, text_span in original_preds:
+                if t in problematic_classes:
+                    class_predictions[t].append((file, s, e, text_span, file_text))
         
-        # Group by class
-        for s, e, t, text_span in original_golds:
-            if t in problematic_classes:
-                class_golds[t].append((file, s, e, text_span, file_text))
-        
-        for s, e, t, text_span in original_preds:
-            if t in problematic_classes:
-                class_predictions[t].append((file, s, e, text_span, file_text))
-    
-    # Print detailed analysis for each problematic class
-    for tag in problematic_classes[:5]:  # Limit to first 5 classes to avoid too much output
-        print(f"\n{'-'*60}")
-        print(f"CLASS: {tag}")
-        print(f"Metrics: F1={metrics[tag]['f1']:.3f}, Precision={metrics[tag]['precision']:.3f}, Recall={metrics[tag]['recall']:.3f}")
-        print(f"Counts: TP={metrics[tag]['tp']}, FP={metrics[tag]['fp']}, FN={metrics[tag]['fn']}")
-        print(f"{'-'*60}")
-        
-        # Show sample gold annotations (what should be found)
-        golds_for_class = class_golds[tag]
-        print(f"\nSAMPLE GOLD ANNOTATIONS ({len(golds_for_class)} total):")
-        for i, (file, s, e, text_span, full_text) in enumerate(golds_for_class[:3]):
-            context_start = max(0, s - 30)
-            context_end = min(len(full_text), e + 30)
-            context = full_text[context_start:context_end]
-            highlighted = context.replace(text_span, f"**{text_span}**")
-            print(f"  {i+1}. File: {file}")
-            print(f"     Text: '{text_span}' (chars {s}-{e})")
-            print(f"     Context: ...{highlighted}...")
-            print()
-        
-        # Show sample predictions (what was actually found)
-        preds_for_class = class_predictions[tag]
-        print(f"SAMPLE PREDICTIONS ({len(preds_for_class)} total):")
-        if preds_for_class:
-            for i, (file, s, e, text_span, full_text) in enumerate(preds_for_class[:3]):
+        # Print detailed analysis for each problematic class
+        for tag in problematic_classes[:5]:  # Limit to first 5 classes to avoid too much output
+            print(f"\n{'-'*60}")
+            print(f"CLASS: {tag}")
+            print(f"Metrics: F1={metrics[tag]['f1']:.3f}, Precision={metrics[tag]['precision']:.3f}, Recall={metrics[tag]['recall']:.3f}")
+            print(f"Counts: TP={metrics[tag]['tp']}, FP={metrics[tag]['fp']}, FN={metrics[tag]['fn']}")
+            print(f"{'-'*60}")
+            
+            # Show sample gold annotations (what should be found)
+            golds_for_class = class_golds[tag]
+            print(f"\nSAMPLE GOLD ANNOTATIONS ({len(golds_for_class)} total):")
+            for i, (file, s, e, text_span, full_text) in enumerate(golds_for_class[:3]):
                 context_start = max(0, s - 30)
                 context_end = min(len(full_text), e + 30)
                 context = full_text[context_start:context_end]
@@ -1456,41 +1458,56 @@ if __name__ == "__main__":
                 print(f"     Text: '{text_span}' (chars {s}-{e})")
                 print(f"     Context: ...{highlighted}...")
                 print()
-        else:
-            print("  No predictions found for this class!")
             
-        # Show some examples of what was predicted instead in files that should have this class
-        print(f"ALTERNATIVE PREDICTIONS IN FILES WITH {tag} GOLD:")
-        files_with_gold = set(file for file, _, _, _, _ in golds_for_class)
-        alternative_preds = []
-        
-        for file in list(files_with_gold)[:2]:  # Check first 2 files
-            if file in text2pred and "preds" in text2pred[file]:
-                file_preds = text2pred[file]["preds"]
-                for s, e, t, text_span in file_preds:
-                    if t != tag:  # Different class predicted
-                        alternative_preds.append((file, s, e, t, text_span, text2pred[file]["text"]))
-        
-        for i, (file, s, e, pred_type, text_span, full_text) in enumerate(alternative_preds[:3]):
-            context_start = max(0, s - 30)
-            context_end = min(len(full_text), e + 30)
-            context = full_text[context_start:context_end]
-            highlighted = context.replace(text_span, f"**{text_span}**")
-            print(f"  {i+1}. File: {file}")
-            print(f"     Predicted as: {pred_type}")
-            print(f"     Text: '{text_span}' (chars {s}-{e})")
-            print(f"     Context: ...{highlighted}...")
-            print()
+            # Show sample predictions (what was actually found)
+            preds_for_class = class_predictions[tag]
+            print(f"SAMPLE PREDICTIONS ({len(preds_for_class)} total):")
+            if preds_for_class:
+                for i, (file, s, e, text_span, full_text) in enumerate(preds_for_class[:3]):
+                    context_start = max(0, s - 30)
+                    context_end = min(len(full_text), e + 30)
+                    context = full_text[context_start:context_end]
+                    highlighted = context.replace(text_span, f"**{text_span}**")
+                    print(f"  {i+1}. File: {file}")
+                    print(f"     Text: '{text_span}' (chars {s}-{e})")
+                    print(f"     Context: ...{highlighted}...")
+                    print()
+            else:
+                print("  No predictions found for this class!")
+                
+            # Show some examples of what was predicted instead in files that should have this class
+            print(f"ALTERNATIVE PREDICTIONS IN FILES WITH {tag} GOLD:")
+            files_with_gold = set(file for file, _, _, _, _ in golds_for_class)
+            alternative_preds = []
             
-        if not alternative_preds:
-            print("  No alternative predictions found in files with gold annotations.")
+            for file in list(files_with_gold)[:2]:  # Check first 2 files
+                if file in text2pred and "preds" in text2pred[file]:
+                    file_preds = text2pred[file]["preds"]
+                    for s, e, t, text_span in file_preds:
+                        if t != tag:  # Different class predicted
+                            alternative_preds.append((file, s, e, t, text_span, text2pred[file]["text"]))
+            
+            for i, (file, s, e, pred_type, text_span, full_text) in enumerate(alternative_preds[:3]):
+                context_start = max(0, s - 30)
+                context_end = min(len(full_text), e + 30)
+                context = full_text[context_start:context_end]
+                highlighted = context.replace(text_span, f"**{text_span}**")
+                print(f"  {i+1}. File: {file}")
+                print(f"     Predicted as: {pred_type}")
+                print(f"     Text: '{text_span}' (chars {s}-{e})")
+                print(f"     Context: ...{highlighted}...")
+                print()
+                
+            if not alternative_preds:
+                print("  No alternative predictions found in files with gold annotations.")
+            
+            print(f"\n{'='*40}")
         
-        print(f"\n{'='*40}")
-    
-    print(f"\nFull analysis complete. Check the detailed breakdowns above.")
-    print(f"Total problematic classes: {len(problematic_classes)}")
-    print(f"Overall recall: {metrics['total']['recall']:.3f}")
-    print(f"Overall F1: {metrics['total']['f1']:.3f}")
-        
-
-
+        print(f"\nFull analysis complete. Check the detailed breakdowns above.")
+        print(f"Total problematic classes: {len(problematic_classes)}")
+        print(f"Overall micro recall: {metrics['micro']['recall']:.3f}")
+        print(f"Overall micro precision: {metrics['micro']['precision']:.3f}")
+        print(f"Overall micro F1: {metrics['micro']['f1']:.3f}")
+        print(f"Overall macro recall: {metrics['macro']['recall']:.3f}")
+        print(f"Overall macro precision: {metrics['macro']['precision']:.3f}")
+        print(f"Overall macro F1: {metrics['macro']['f1']:.3f}")
