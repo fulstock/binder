@@ -226,27 +226,8 @@ class DataTrainingArguments:
                 extension = self.test_file.split(".")[-1]
                 assert extension == "json", "`test_file` should be a json file."
 
-class BinderInference:
-
-    def __init__(self, config_path = "./conf/inference/text2ner/inference-config.json", device = "auto"):
-        os.environ["WANDB_DISABLED"] = "true"
-
-        parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments))
-        model_args, data_args, training_args = parser.parse_json_file(json_file=config_path)
-        if device == "cpu":
-            # training_args.no_cuda = True
-            # training_args.custom_device = 'cpu'
-            training_args.use_cpu = True
-        else:
-            training_args.use_cpu = False
-
-        self.model_args = model_args
-        self.data_args = data_args
-        self.training_args = training_args
-        set_seed(training_args.seed)
-
-        self.ru_tokenizer = load("tokenizers/punkt/russian.pickle") # Загрузка токенизатора для русского языка
-        self.word_tokenizer = NLTKWordTokenizer()
+# Import consolidated BinderInference from src.inference
+from src.inference import BinderInference
 
         self.tokenizer = tokenizer = AutoTokenizer.from_pretrained(
             model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
