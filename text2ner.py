@@ -1085,9 +1085,9 @@ def stream_batch_prediction_demo():
     print("="*80)
     
     # Configuration
-    inference_config_path = "./conf/inference/inference-config-optimized.json"
-    dataset_path = "/home/student1/data/100texts/raw"
-    predicted_dataset_path = "/home/student1/data/100texts/ner_predicted"
+    inference_config_path = "./conf/inference/small_nerel_inf.json"
+    dataset_path = "/home/student1/data/NEREL1.1/test"
+    predicted_dataset_path = "/home/student1/data/NEREL1.1/test_predicted_small_nerel"
     BATCH_SIZE = 16
     
     print(f"Dataset path: {dataset_path}")
