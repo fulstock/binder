@@ -8,6 +8,11 @@ import sys
 from dataclasses import dataclass, field
 from typing import Optional, List
 
+import faulthandler
+faulthandler.enable()
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 import datasets
 from datasets import load_dataset
 
@@ -542,15 +547,24 @@ def main():
             # We will select sample from whole data if argument is specified
             train_dataset = train_dataset.select(range(data_args.max_train_samples))
         # Create train feature from dataset
-        with training_args.main_process_first(desc="train dataset map pre-processing"):
-            train_dataset = train_dataset.map(
-                prepare_train_features,
-                batched=True,
-                num_proc=data_args.preprocessing_num_workers,
-                remove_columns=column_names,
-                load_from_cache_file=not data_args.overwrite_cache,
-                desc="Running tokenizer on train dataset",
-            )
+
+        try:
+
+            with training_args.main_process_first(desc="train dataset map pre-processing"):
+                train_dataset = train_dataset.map(
+                    prepare_train_features,
+                    batched=True,
+                    num_proc=data_args.preprocessing_num_workers,
+                    remove_columns=column_names,
+                    load_from_cache_file=not data_args.overwrite_cache,
+                    desc="Running tokenizer on train dataset",
+                )
+
+        except Exception as e:
+            print(f"Error in a worker process: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+            raise # Re-raise to ensure the parent process is notified
 
     # Validation preprocessing
     def prepare_validation_features(examples, split: str = "dev"):

@@ -1,0 +1,11 @@
+{"dataset": "RuTermEval-track1-pseudo", "name": "ANY", "description": "ANY", "description_source": "Keyword Prompt"}
+{"dataset": "RuTermEval-track2-pseudo", "name": "COMMON", "description": "COMMON", "description_source": "Keyword Prompt"}
+{"dataset": "RuTermEval-track2-pseudo", "name": "NOMEN", "description": "NOMEN", "description_source": "Keyword Prompt"}
+{"dataset": "RuTermEval-track2-pseudo", "name": "SPECIFIC", "description": "SPECIFIC", "description_source": "Keyword Prompt"}
+{"dataset": "RuTermEval-track1", "name": "ANY", "description": "ANY", "description_source": "Keyword Prompt"}
+{"dataset": "RuTermEval-track2", "name": "COMMON", "description": "COMMON", "description_source": "Keyword Prompt"}
+{"dataset": "RuTermEval-track2", "name": "NOMEN", "description": "NOMEN", "description_source": "Keyword Prompt"}
+{"dataset": "RuTermEval-track2", "name": "SPECIFIC", "description": "SPECIFIC", "description_source": "Keyword Prompt"}
+{"dataset": "RuTermEval-track3", "name": "COMMON", "description": "COMMON", "description_source": "Keyword Prompt"}
+{"dataset": "RuTermEval-track3", "name": "NOMEN", "description": "NOMEN", "description_source": "Keyword Prompt"}
+{"dataset": "RuTermEval-track3", "name": "SPECIFIC", "description": "SPECIFIC", "description_source": "Keyword Prompt"}

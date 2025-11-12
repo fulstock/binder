@@ -1,71 +1,66 @@
-# Форк Bi-Encoder (Binder) для русского языка на примере данных в формате BRAT.
+# [Optimizing Bi-Encoder for Named Entity Recognition via Contrastive Learning](https://openreview.net/forum?id=9EAQVEINuum)
 
-См. [оригинальный репозиторий](https://github.com/microsoft/binder) за подробностями архитектуры модели. 
+## Introduction
+This is the repository for BINDER ([**BI**-encoder for **N**ame**D** **E**ntity **R**ecognition via Contrastive Learning](https://openreview.net/forum?id=9EAQVEINuum)) accepted at ICLR 2023.
 
-# Подготовка
+BINDER employs two encoders to separately map text and entity types
+into the same vector space, and reuses the vector representations of entity types for different text spans (or vice versa), resulting in a faster training and inference speed.
+Based on the bi-encoder representations, BINDER introduces a unified contrastive learning framework for NER, which encourages the representation of entity types to be similar with the corresponding
+entity mentions, and to be dissimilar with non-entity text spans.
+BINDER also introudces a novel dynamic thresholding loss in contrastive learning. At test time, it leverages candidate-specific dynamic thresholds to distinguish entity spans from non-entity ones.
+Check out [our paper](https://openreview.net/forum?id=9EAQVEINuum) for the details.
 
-## 1. Окружение и библиотеки
-
-`
-Python: 3.9
-`
-
-Установка библиотек:
-```bash
-pip install torch==1.13.0 --index-url https://download.pytorch.org/whl/cu116
-pip install -r requirements.txt
+If you find our code is useful, please cite:
+```bib
+@article{zhang-etal-2022-binder,
+  title={Optimizing Bi-Encoder for Named Entity Recognition via Contrastive Learning},
+  author={Zhang, Sheng and Cheng, Hao and Gao, Jianfeng and Poon, Hoifung},
+  journal={arXiv preprint arXiv:2208.14565},
+  year={2022}
+}
 ```
 
-## 2. Подготовка данных
 
-### Конвертация
-Для запуска обучения Binder требуется конвертировать формат данных BRAT во внутренний формат HFDS. Для этого достаточно запустить скрипт `data_preproc/brat_to_hfds.py`, который принимает следующие параметры командной строки:
-- `--brat_dataset_path`: путь к папке, где расположены данные в формате BRAT. Предполагается, что они уже разделены на три поднабора по трём папками и названы соответственно `train`, `dev`, `test`. 
-- `--hfds_output_path`: путь, куда будет экспортирован конвертированный набор данных. Если оставить параметр пустым, то путь будет совпадать с путём, указанным в `--brat_dataset_path`.
-- `--tags_path`: путь к файлу с названиями всех классов именованных сущностей в рассматриваемом наборе данных. 
+## Quick Start
+### 1. Data Preparation
 
-Пример запуска: 
+Follow the instructions [README.md](data_preproc/README.md) in the data_preproc folder.
+
+
+### 2. Environment Setup
 ```bash
-python data_preproc/brat_to_hfds.py --brat_dataset_path ./data/NEREL --hfds_output_path ./data/NEREL-binder --tags_path ./data/nerel.tags
+conda create -n binder -y python=3.9
+conda activate binder
+conda install pytorch==1.13 pytorch-cuda=11.6 -c pytorch -c nvidia
+pip install transformers==4.24.0 datasets==2.6.1 wandb==0.13.5 seqeval==1.2.2
 ```
 
-Пример файла с названиями классов см. `data_preproc/nerel.tags`.
-
-В `data` можно увидеть набор данных [NEREL](https://github.com/nerel-ds/NEREL) до и после конвертации.
-
-После выполнения, в конечной папке появятся три конвертированных файла набора данных в формате HFDS, названные соответственно по поднаборам `train.json`, `dev.json`, `test.json`.
-
-### Вывод
-Для предсказания сущностей на данных без разметки всё равно требуется их конвертация из формата BRAT в формат HFDS. Этим занимается скрипт `brat_to_hfds_inference.py`. Параметры те же, но параметр `--tags_path` не требуется. 
-
-# Использование
-## 1. Запуск модели
-
-Запуск обучения осуществляется скриптом `run_ner.py`, которому нужно передать конфигурационный файл с параметрами обучения:
-
+### 3. Experiment Run
+Assuming you have prepared data for ACE2005 and finished environment setup, below is the command to run an experiment on ACE2005:
 ```bash
-python ./run_ner.py ./conf/lexical-conf.json
+python run_ner.py conf/ace05.json
 ```
 
-Параметры самой модели указаны в исходной [архитектуре](https://github.com/microsoft/binder/blob/54c74ba6e5eac37203ff530cd472e8b65d248ff0/run_ner.py#L94).
+To run experiments on other datasets, simply change the config.
 
-Остальные параметры передаются в `transformers.Trainer` как `transformers.TrainingArguments`. Подробнее о них можно прочесть в [документации](https://huggingface.co/docs/transformers/v4.24.0/en/main_classes/trainer#transformers.TrainingArguments).
+## Contributing
 
-Пример конфигурационного файла с параметрами по умолчанию представлен в `conf/lexical-conf.json`.
+This project welcomes contributions and suggestions.  Most contributions require you to agree to a
+Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
+the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
 
-## 2. Тестирование
+When you submit a pull request, a CLA bot will automatically determine whether you need to provide
+a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
+provided by the bot. You will only need to do this once across all repos using our CLA.
 
-После обучения, в конце вывода можно увидеть результаты обучения и предсказания на тестовом наборе данных. Итоговые предсказания будут находиться в папке вывода (указанной в параметре `output_dir`) под названием `predict_predictions.json`. Там же будут результаты по метрикам, конфигурации и прочая полезная информация об обучении. 
+This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
+For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
+contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
 
-Для того, чтобы получить итоговые результаты предсказания в читаемом виде (например, в формате BRAT), требуется запустить скрипт `export/hfds_to_brat.py` со следующими параметрами:
-- `--output_path`: путь к папке, где будут сохранены итоговые предсказания в формате BRAT
-- `--pred_file`: путь к `predict_predictions.json`
-- `--orig_path`: путь к исходной папке с текстами (над которыми проводилось предсказание модели)
-- `--tags_file`: путь к файлу с названиями классов сущностей (тот же параметр, что и в подготовке данных)
+## Trademarks
 
-Пример запуска:
-```bash
-python export/hfds_to_brat.py --output_path ./data/NEREL/test_pred --pred_file ./logs/NEREL-binder/lao/pure/33/predict_predictions.json --orig_path ./data/NEREL/test --tags_file ./data_preproc/nerel.tags
-```
-
-Также в папке `export` предложен скрипт `metrics.py`, позволяющий подсчитать метрики заново для итогового предсказания. См. файл за подробностями.
+This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft
+trademarks or logos is subject to and must follow
+[Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
+Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
+Any use of third-party trademarks or logos are subject to those third-party's policies.
