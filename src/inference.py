@@ -80,7 +80,7 @@ class DataTrainingArguments:
     """Arguments for data processing and training configuration."""
     dataset_name: str = field(metadata={"help": "The name of the dataset to use."})
     entity_type_file: str = field(metadata={"help": "A json file for the entity types."})
-    entity_type_key_field: str = field(default="type", metadata={"help": "The key field for entity type."})
+    entity_type_key_field: str = field(default="name", metadata={"help": "The key field for entity type."})
     entity_type_desc_field: str = field(default="description", metadata={"help": "The description field for entity type."})
     dataset_entity_types: Optional[List[str]] = field(
         default=None, metadata={"help": "Entity types to include, leave empty to include all"}
@@ -249,42 +249,23 @@ class BinderInference:
             print(f"Using custom prediction threshold factor: {prediction_threshold_factor}")
 
     def _optimize_model(self, model):
-        """Apply mixed-precision and compilation/JIT techniques for faster inference."""
+        """Apply only safe, proven optimizations for faster inference."""
+        # Disable gradient checkpointing for inference (saves memory and computation)
         try:
-            # Convert to half precision when running on GPU for speed & memory benefits
-            if self.device != "cpu" and torch.cuda.is_available():
-                model = model.half()
+            if hasattr(model, 'config'):
+                model.config.gradient_checkpointing = False
+            if hasattr(model, 'gradient_checkpointing_disable'):
+                model.gradient_checkpointing_disable()
+        except Exception:
+            pass
 
-            # Try torch.compile if available (PyTorch ≥2.0)
-            try:
-                import torch._dynamo
-                if hasattr(torch, "compile") and callable(torch.compile) and hasattr(torch, "compiler"):
-                    model = torch.compile(model, mode="reduce-overhead", fullgraph=False)
-                    print("Model compiled with torch.compile for faster inference")
-                    return model
-            except (ImportError, AttributeError, Exception) as compile_error:
-                print(f"torch.compile not available or failed: {compile_error}")
+        # DISABLED OPTIMIZATIONS (were causing slowdowns):
+        # - Type embedding caching: hash computation overhead > savings
+        # - torch.compile(): compilation overhead not worth it for small batches
+        # - FP16: can be slower on CPU or older GPUs
+        # - Static padding: adds unnecessary computation
+        # - torch.jit.script: incompatible with some Transformers operations
 
-            # Fallback to torch.jit.script if torch.compile is not available
-            try:
-                print("Attempting to script model submodules...")
-                for name, module in model.named_children():
-                    try:
-                        scripted_module = torch.jit.script(module)
-                        setattr(model, name, scripted_module)
-                        print(f"  - Scripted module: {name}")
-                    except Exception as jit_error_module:
-                        print(f"  - Could not script module {name}: {jit_error_module}")
-                print("Model scripting of submodules complete.")
-                return model
-            except Exception as jit_error:
-                print(f"torch.jit.script failed on submodules: {jit_error}")
-
-        except Exception as opt_error:
-            print(f"Model optimization failed: {opt_error}")
-
-        # If all optimizations fail, return the original model
-        print("Using original model without optimizations")
         return model
 
     @property
@@ -328,7 +309,7 @@ class BinderInference:
         """Lazy loading of main tokenizer."""
         if self._tokenizer is None:
             try:
-                print("Loading main tokenizer...")
+                # print("Loading main tokenizer...")
                 self._tokenizer = AutoTokenizer.from_pretrained(
                     self.model_args.tokenizer_name if self.model_args.tokenizer_name else self.model_args.model_name_or_path,
                     cache_dir=self.model_args.cache_dir,
@@ -337,7 +318,7 @@ class BinderInference:
                     use_auth_token=True if self.model_args.use_auth_token else None,
                     add_prefix_space=True,
                 )
-                print("Main tokenizer loaded")
+                # print("Main tokenizer loaded")
             except Exception as e:
                 raise RuntimeError(f"Failed to load tokenizer: {e}")
         return self._tokenizer
@@ -347,9 +328,9 @@ class BinderInference:
         """Lazy loading of trainer."""
         if self._trainer is None:
             try:
-                print("Initializing trainer (this may take a few minutes)...")
+                # print("Initializing trainer (this may take a few minutes)...")
                 self._initialize_trainer()
-                print("Trainer initialized")
+                # print("Trainer initialized")
             except Exception as e:
                 raise RuntimeError(f"Failed to initialize trainer: {e}")
         return self._trainer
@@ -383,7 +364,7 @@ class BinderInference:
 
         # Load entity type knowledge
         if self._entity_type_cache is None:
-            print("Loading entity type knowledge...")
+            # print("Loading entity type knowledge...")
             try:
                 entity_type_knowledge = load_dataset(
                     "json", data_files=data_args.entity_type_file, cache_dir=model_args.cache_dir
@@ -398,7 +379,7 @@ class BinderInference:
                 )
                 entity_type_knowledge = entity_type_knowledge.sort(data_args.entity_type_key_field)
                 self._entity_type_cache = entity_type_knowledge
-                print(f"Loaded {len(entity_type_knowledge)} entity types")
+                # print(f"Loaded {len(entity_type_knowledge)} entity types")
             except Exception as e:
                 raise RuntimeError(f"Failed to load entity type file '{data_args.entity_type_file}': {e}")
 
@@ -414,7 +395,7 @@ class BinderInference:
             )
             return tokenized_examples
 
-        print("Tokenizing entity type descriptions...")
+        # print("Tokenizing entity type descriptions...")
         with training_args.main_process_first(desc="Tokenizing entity type descriptions"):
             tokenized_descriptions = entity_type_knowledge.map(
                 prepare_type_features,
@@ -428,9 +409,9 @@ class BinderInference:
         gc.collect()
 
         # Initialize model with comprehensive error handling
-        print("Loading Binder model...")
-        print(f"Binder model path: {model_args.binder_model_name_or_path}")
-        print(f"Base model path: {model_args.model_name_or_path}")
+        # print("Loading Binder model...")
+        # print(f"Binder model path: {model_args.binder_model_name_or_path}")
+        # print(f"Base model path: {model_args.model_name_or_path}")
 
         # Load config with fallback strategies
         try:
@@ -489,46 +470,46 @@ class BinderInference:
             """Load model with comprehensive error handling."""
             # Strategy 1: Direct loading
             try:
-                print("Strategy 1: Direct model loading...")
+                # print("Strategy 1: Direct model loading...")
                 model = Binder.from_pretrained(model_args.binder_model_name_or_path, config=config)
-                print("Strategy 1 successful: Model loaded directly")
+                # print("Strategy 1 successful: Model loaded directly")
                 return model
             except Exception as e1:
-                print(f"Strategy 1 failed: {e1}")
+                pass  # print(f"Strategy 1 failed: {e1}")
 
             # Strategy 2: Load with trust_remote_code
             try:
-                print("Strategy 2: Loading with trust_remote_code...")
+                # print("Strategy 2: Loading with trust_remote_code...")
                 model = Binder.from_pretrained(
                     model_args.binder_model_name_or_path,
                     config=config,
                     trust_remote_code=True
                 )
-                print("Strategy 2 successful: Model loaded with trust_remote_code")
+                # print("Strategy 2 successful: Model loaded with trust_remote_code")
                 return model
             except Exception as e2:
-                print(f"Strategy 2 failed: {e2}")
+                pass  # print(f"Strategy 2 failed: {e2}")
 
             # Strategy 3: Force download
             try:
-                print("Strategy 3: Force download to avoid cache corruption...")
+                # print("Strategy 3: Force download to avoid cache corruption...")
                 model = Binder.from_pretrained(
                     model_args.binder_model_name_or_path,
                     config=config,
                     force_download=True,
                     resume_download=True
                 )
-                print("Strategy 3 successful: Model loaded with force download")
+                # print("Strategy 3 successful: Model loaded with force download")
                 return model
             except Exception as e3:
-                print(f"Strategy 3 failed: {e3}")
+                pass  # print(f"Strategy 3 failed: {e3}")
 
             raise RuntimeError(f"Cannot load model from {model_args.binder_model_name_or_path}. All strategies failed.")
 
         # Execute model loading
         try:
             model = load_model_with_workarounds()
-            print("Model loading completed successfully")
+            # print("Model loading completed successfully")
         except Exception as final_error:
             print(f"All model loading strategies failed: {final_error}")
             raise RuntimeError("Model loading failed completely")
@@ -536,7 +517,7 @@ class BinderInference:
         # Configure model
         try:
             model.eval()
-            print("Model set to evaluation mode")
+            # print("Model set to evaluation mode")
         except Exception as eval_error:
             print(f"Could not set model to eval mode: {eval_error}")
 
@@ -545,9 +526,9 @@ class BinderInference:
             if torch.cuda.get_device_properties(0).total_memory < 2 * 1024**3:
                 print("⚠️  Limited GPU memory detected. Consider using CPU mode.")
             model = model.cuda()
-            print("Model moved to GPU")
+            # print("Model moved to GPU")
         else:
-            print("Using CPU for inference")
+            pass  # print("Using CPU for inference")
 
         # Apply optimizations
         model = self._optimize_model(model)

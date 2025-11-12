@@ -155,3 +155,17 @@
 {"dataset": "seccol_events_texts_1500_new", "name" : "TIME", "description": "TIME", "description_source" : "Keyword prompt"}
 {"dataset": "seccol_events_texts_1500_new", "name" : "VULNERABILITY", "description": "VULNERABILITY", "description_source" : "Keyword prompt"}
 {"dataset": "seccol_events_texts_1500_new", "name" : "WEBSITE", "description": "WEBSITE", "description_source" : "Keyword prompt"}
+{"dataset": "small_NEREL-binder", "name": "CITY", "description": "CITY", "description_source": "Keyword prompt"}
+{"dataset": "small_NEREL-binder", "name": "COUNTRY", "description": "COUNTRY", "description_source": "Keyword prompt"}
+{"dataset": "small_NEREL-binder", "name": "DATE", "description": "DATE", "description_source": "Keyword prompt"}
+{"dataset": "small_NEREL-binder", "name": "DISTRICT", "description": "DISTRICT", "description_source": "Keyword prompt"}
+{"dataset": "small_NEREL-binder", "name": "EVENT", "description": "EVENT", "description_source": "Keyword prompt"}
+{"dataset": "small_NEREL-binder", "name": "IDEOLOGY", "description": "IDEOLOGY", "description_source": "Keyword prompt"}
+{"dataset": "small_NEREL-binder", "name": "LOCATION", "description": "LOCATION", "description_source": "Keyword prompt"}
+{"dataset": "small_NEREL-binder", "name": "NATIONALITY", "description": "NATIONALITY", "description_source": "Keyword prompt"}
+{"dataset": "small_NEREL-binder", "name": "ORGANIZATION", "description": "ORGANIZATION", "description_source": "Keyword prompt"}
+{"dataset": "small_NEREL-binder", "name": "PERSON", "description": "PERSON", "description_source": "Keyword prompt"}
+{"dataset": "small_NEREL-binder", "name": "PROFESSION", "description": "PROFESSION", "description_source": "Keyword prompt"}
+{"dataset": "small_NEREL-binder", "name": "RELIGION", "description": "RELIGION", "description_source": "Keyword prompt"}
+{"dataset": "small_NEREL-binder", "name": "STATE_OR_PROVINCE", "description": "STATE_OR_PROVINCE", "description_source": "Keyword prompt"}
+{"dataset": "small_NEREL-binder", "name": "TIME", "description": "TIME", "description_source": "Keyword prompt"}
