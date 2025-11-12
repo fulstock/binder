@@ -155,6 +155,11 @@
 {"dataset": "seccol_events_texts_1500_new", "name" : "TIME", "description": "TIME", "description_source" : "Keyword prompt"}
 {"dataset": "seccol_events_texts_1500_new", "name" : "VULNERABILITY", "description": "VULNERABILITY", "description_source" : "Keyword prompt"}
 {"dataset": "seccol_events_texts_1500_new", "name" : "WEBSITE", "description": "WEBSITE", "description_source" : "Keyword prompt"}
+{"dataset": "GENIA-binder", "name" : "DNA", "description": "DNA", "description_source" : "Keyword prompt"}
+{"dataset": "GENIA-binder", "name" : "RNA", "description": "RNA", "description_source" : "Keyword prompt"}
+{"dataset": "GENIA-binder", "name" : "cell_line", "description": "cell_line", "description_source" : "Keyword prompt"}
+{"dataset": "GENIA-binder", "name" : "cell_type", "description": "cell_type", "description_source" : "Keyword prompt"}
+{"dataset": "GENIA-binder", "name" : "protein", "description": "protein", "description_source" : "Keyword prompt"}
 {"dataset": "small_NEREL-binder", "name": "CITY", "description": "CITY", "description_source": "Keyword prompt"}
 {"dataset": "small_NEREL-binder", "name": "COUNTRY", "description": "COUNTRY", "description_source": "Keyword prompt"}
 {"dataset": "small_NEREL-binder", "name": "DATE", "description": "DATE", "description_source": "Keyword prompt"}
@@ -169,8 +174,3 @@
 {"dataset": "small_NEREL-binder", "name": "RELIGION", "description": "RELIGION", "description_source": "Keyword prompt"}
 {"dataset": "small_NEREL-binder", "name": "STATE_OR_PROVINCE", "description": "STATE_OR_PROVINCE", "description_source": "Keyword prompt"}
 {"dataset": "small_NEREL-binder", "name": "TIME", "description": "TIME", "description_source": "Keyword prompt"}
-{"dataset": "GENIA-binder", "name" : "DNA", "description": "DNA", "description_source" : "Keyword prompt"}
-{"dataset": "GENIA-binder", "name" : "RNA", "description": "RNA", "description_source" : "Keyword prompt"}
-{"dataset": "GENIA-binder", "name" : "cell_line", "description": "cell_line", "description_source" : "Keyword prompt"}
-{"dataset": "GENIA-binder", "name" : "cell_type", "description": "cell_type", "description_source" : "Keyword prompt"}
-{"dataset": "GENIA-binder", "name" : "protein", "description": "protein", "description_source" : "Keyword prompt"}
