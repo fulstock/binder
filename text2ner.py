@@ -362,13 +362,25 @@ def stream_batch_prediction_demo(input_encoding='utf-8', output_encoding='utf-8'
     print("="*80)
 
     # Configuration
-    inference_config_path = "./inference/inference-config-optimized.json"
-    dataset_path = "S:/HRCode/data/NEREL1.1/test"
-    predicted_dataset_path = "S:/HRCode/data/NEREL1.1/test_predicted"
+    # inference_config_path = "./inference/inference-config-optimized.json"
+    # dataset_path = "S:/HRCode/data/NEREL1.1/test"
+    # predicted_dataset_path = "S:/HRCode/data/NEREL1.1/test_predicted"
+    # inference_config_path = "./inference/inference-config-optimized.json"
+    # dataset_path = "S:/HRCode/data/NEREL1.1/train"
+    # predicted_dataset_path = "S:/HRCode/data/NEREL1.1/train_predicted"
+    # inference_config_path = "./inference/inference-config-optimized.json"
+    # dataset_path = "S:/HRCode/data/examples_check"
+    # predicted_dataset_path = "S:/HRCode/data/examples_check_predicted_normal"
+    # inference_config_path = "./inference/rubert-tiny2.json"
+    # dataset_path = "S:/HRCode/data/NEREL1.1/test"
+    # predicted_dataset_path = "S:/HRCode/data/NEREL1.1/test_predicted_rubert-tiny2"
+    inference_config_path = "./inference/rubert-tiny2.json"
+    dataset_path = "S:/HRCode/data/NEREL1.1/train"
+    predicted_dataset_path = "S:/HRCode/data/NEREL1.1/train_predicted_rubert-tiny2"
     # inference_config_path = "./inference/small_nerel_inf.json"  # Use the config for small_nerel model
     # dataset_path = "S:/HRCode/data/NEREL1.1/test"
     # predicted_dataset_path = "S:/HRCode/data/NEREL1.1/test_predicted_small"
-    BATCH_SIZE = 16
+    BATCH_SIZE = 1024
 
     print(f"Input encoding: {input_encoding}")
     print(f"Output encoding: {output_encoding}")

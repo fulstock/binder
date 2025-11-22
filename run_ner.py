@@ -36,6 +36,73 @@ from src import utils as postprocess_utils
 logger = logging.getLogger(__name__)
 
 
+def load_tokenizer_with_fallback(model_name_or_path, cache_dir=None, use_fast=False, **kwargs):
+    """
+    Load tokenizer with fallback strategies to handle cache corruption issues.
+
+    This function handles the common error:
+    "Exception: data did not match any variant of untagged enum ModelWrapper"
+    which occurs when the cached tokenizer.json is incompatible with the tokenizers library version.
+    """
+    import shutil
+    from pathlib import Path
+
+    try:
+        # First attempt: Load normally
+        logger.info(f"Loading tokenizer from {model_name_or_path} with use_fast={use_fast}")
+        return AutoTokenizer.from_pretrained(
+            model_name_or_path,
+            cache_dir=cache_dir,
+            use_fast=use_fast,
+            **kwargs
+        )
+    except Exception as e:
+        error_msg = str(e)
+        if "ModelWrapper" in error_msg or "untagged enum" in error_msg:
+            logger.warning(f"Tokenizer cache corruption detected: {error_msg}")
+            logger.info("Attempting to clear cache and reload...")
+
+            # Find and clear the cached model directory
+            cache_base = cache_dir if cache_dir else Path.home() / ".cache" / "huggingface" / "hub"
+            cache_base = Path(cache_base)
+
+            # Convert model name to cache directory format (e.g., deepvk/RuModernBERT-small -> models--deepvk--RuModernBERT-small)
+            model_cache_name = "models--" + model_name_or_path.replace("/", "--")
+            model_cache_path = cache_base / model_cache_name
+
+            if model_cache_path.exists():
+                logger.info(f"Clearing cache directory: {model_cache_path}")
+                try:
+                    shutil.rmtree(model_cache_path)
+                    logger.info("Cache cleared successfully. Re-downloading tokenizer...")
+                except Exception as cache_error:
+                    logger.warning(f"Failed to clear cache: {cache_error}")
+
+            # Retry loading after cache clear
+            try:
+                return AutoTokenizer.from_pretrained(
+                    model_name_or_path,
+                    cache_dir=cache_dir,
+                    use_fast=use_fast,
+                    **kwargs
+                )
+            except Exception as retry_error:
+                logger.error(f"Failed to load tokenizer after cache clear: {retry_error}")
+
+                # Last resort: Try with opposite use_fast setting
+                alternate_use_fast = not use_fast
+                logger.info(f"Attempting with use_fast={alternate_use_fast}")
+                return AutoTokenizer.from_pretrained(
+                    model_name_or_path,
+                    cache_dir=cache_dir,
+                    use_fast=alternate_use_fast,
+                    **kwargs
+                )
+        else:
+            # Different error, re-raise
+            raise
+
+
 @dataclass
 class ModelArguments:
     """
@@ -310,7 +377,7 @@ def main():
     # Distributed training:
     # The .from_pretrained methods guarantee that only one local process can concurrently
     # download model & vocab.
-    tokenizer = AutoTokenizer.from_pretrained(
+    tokenizer = load_tokenizer_with_fallback(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
         cache_dir=model_args.cache_dir,
         use_fast=False,
