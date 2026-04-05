@@ -621,6 +621,7 @@ def main():
                 train_dataset = train_dataset.map(
                     prepare_train_features,
                     batched=True,
+                    batch_size=32,
                     num_proc=data_args.preprocessing_num_workers,
                     remove_columns=column_names,
                     load_from_cache_file=not data_args.overwrite_cache,
@@ -708,6 +709,7 @@ def main():
             eval_dataset = eval_examples.map(
                 prepare_validation_features,
                 batched=True,
+                batch_size=32,
                 num_proc=data_args.preprocessing_num_workers,
                 remove_columns=column_names,
                 load_from_cache_file=not data_args.overwrite_cache,
@@ -728,6 +730,7 @@ def main():
             predict_dataset = predict_examples.map(
                 lambda x: prepare_validation_features(x, "test"),
                 batched=True,
+                batch_size=32,
                 num_proc=data_args.preprocessing_num_workers,
                 remove_columns=column_names,
                 load_from_cache_file=not data_args.overwrite_cache,
