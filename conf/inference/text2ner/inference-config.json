@@ -4,7 +4,7 @@
     "dataset_name": "NEREL-binder",
     "model_name_or_path": "DeepPavlov/rubert-base-cased",
     "binder_model_name_or_path": "fulstock/NEREL-binder",
-    "entity_type_file": "entity_types/keyword.json",
+    "entity_type_file": "entity_types_kw.json",
     "disable_tqdm": true,
     "logging_strategy": "no",
     "dataset_entity_types": ["AGE", "AWARD", "CITY", "COUNTRY", "CRIME", "DATE", "DISEASE", "DISTRICT", "EVENT", "FACILITY", "FAMILY", "IDEOLOGY", "LANGUAGE", "LAW", "LOCATION", "MONEY", "NATIONALITY", "NUMBER", "ORDINAL", "ORGANIZATION", "PERCENT", "PERSON", "PENALTY", "PRODUCT", "PROFESSION", "RELIGION", "STATE_OR_PROVINCE", "TIME", "WORK_OF_ART"],

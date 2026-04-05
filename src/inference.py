@@ -873,3 +873,438 @@ class BinderInference:
             "num_entity_types": len(self.get_entity_types()),
             "prediction_threshold_factor": self.prediction_threshold_factor,
         }
+
+
+# =============================================================================
+# Timing and Metrics for CLI Evaluation Mode
+# =============================================================================
+
+class TimingStats:
+    """Context manager for timing code sections."""
+
+    def __init__(self):
+        self.stats = {}
+        self._current_name = None
+        self._start_time = None
+
+    def start(self, name: str):
+        """Start timing a named section."""
+        import time
+        self._current_name = name
+        self._start_time = time.time()
+
+    def stop(self):
+        """Stop timing the current section."""
+        import time
+        if self._current_name and self._start_time:
+            elapsed = time.time() - self._start_time
+            if self._current_name not in self.stats:
+                self.stats[self._current_name] = {
+                    'total': 0.0,
+                    'count': 0,
+                    'min': float('inf'),
+                    'max': 0.0
+                }
+            self.stats[self._current_name]['total'] += elapsed
+            self.stats[self._current_name]['count'] += 1
+            self.stats[self._current_name]['min'] = min(self.stats[self._current_name]['min'], elapsed)
+            self.stats[self._current_name]['max'] = max(self.stats[self._current_name]['max'], elapsed)
+            self._current_name = None
+            self._start_time = None
+            return elapsed
+        return 0.0
+
+    def get_summary(self) -> dict:
+        """Get timing summary."""
+        summary = {}
+        for name, data in self.stats.items():
+            if data['count'] > 0:
+                summary[f"{name}_total_sec"] = round(data['total'], 3)
+                summary[f"{name}_avg_sec"] = round(data['total'] / data['count'], 4)
+                summary[f"{name}_min_sec"] = round(data['min'], 4) if data['min'] != float('inf') else 0.0
+                summary[f"{name}_max_sec"] = round(data['max'], 4)
+                summary[f"{name}_count"] = data['count']
+        return summary
+
+
+def compute_metrics(predictions_list: list, gold_list: list) -> dict:
+    """
+    Compute NER metrics from predictions and gold annotations.
+
+    Args:
+        predictions_list: List of prediction lists per document
+                         Each prediction: (start, end, type, text)
+        gold_list: List of gold annotation lists per document
+                  Each annotation: (start, end, type, text)
+
+    Returns:
+        Dictionary with per-class and aggregate metrics
+    """
+    from collections import defaultdict
+
+    # Per-class counts
+    class_tp = defaultdict(int)
+    class_fp = defaultdict(int)
+    class_fn = defaultdict(int)
+
+    all_types = set()
+
+    for preds, golds in zip(predictions_list, gold_list):
+        # Convert to sets of (start, end, type) tuples for matching
+        pred_set = set((p[0], p[1], p[2]) for p in preds)
+        gold_set = set((g[0], g[1], g[2]) for g in golds)
+
+        # Collect all entity types
+        for p in preds:
+            all_types.add(p[2])
+        for g in golds:
+            all_types.add(g[2])
+
+        # Calculate TP, FP, FN per class
+        for entity_type in all_types:
+            pred_of_type = set(p for p in pred_set if p[2] == entity_type)
+            gold_of_type = set(g for g in gold_set if g[2] == entity_type)
+
+            tp = len(pred_of_type & gold_of_type)
+            fp = len(pred_of_type - gold_of_type)
+            fn = len(gold_of_type - pred_of_type)
+
+            class_tp[entity_type] += tp
+            class_fp[entity_type] += fp
+            class_fn[entity_type] += fn
+
+    # Compute per-class metrics
+    per_class = {}
+    for entity_type in sorted(all_types):
+        tp = class_tp[entity_type]
+        fp = class_fp[entity_type]
+        fn = class_fn[entity_type]
+
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+
+        per_class[entity_type] = {
+            'precision': round(precision, 4),
+            'recall': round(recall, 4),
+            'f1': round(f1, 4),
+            'tp': tp,
+            'fp': fp,
+            'fn': fn,
+            'support': tp + fn
+        }
+
+    # Compute micro-averaged metrics
+    total_tp = sum(class_tp.values())
+    total_fp = sum(class_fp.values())
+    total_fn = sum(class_fn.values())
+
+    micro_precision = total_tp / (total_tp + total_fp) if (total_tp + total_fp) > 0 else 0.0
+    micro_recall = total_tp / (total_tp + total_fn) if (total_tp + total_fn) > 0 else 0.0
+    micro_f1 = 2 * micro_precision * micro_recall / (micro_precision + micro_recall) if (micro_precision + micro_recall) > 0 else 0.0
+
+    # Compute macro-averaged metrics
+    if per_class:
+        macro_precision = sum(m['precision'] for m in per_class.values()) / len(per_class)
+        macro_recall = sum(m['recall'] for m in per_class.values()) / len(per_class)
+        macro_f1 = sum(m['f1'] for m in per_class.values()) / len(per_class)
+    else:
+        macro_precision = macro_recall = macro_f1 = 0.0
+
+    return {
+        'per_class': per_class,
+        'micro': {
+            'precision': round(micro_precision, 4),
+            'recall': round(micro_recall, 4),
+            'f1': round(micro_f1, 4),
+            'tp': total_tp,
+            'fp': total_fp,
+            'fn': total_fn
+        },
+        'macro': {
+            'precision': round(macro_precision, 4),
+            'recall': round(macro_recall, 4),
+            'f1': round(macro_f1, 4)
+        }
+    }
+
+
+def print_metrics(metrics: dict, num_docs: int, num_gold: int, num_pred: int):
+    """Print metrics in formatted table."""
+    print("\n" + "=" * 80)
+    print("EVALUATION RESULTS")
+    print("=" * 80)
+    print()
+    print(f"{'Entity Type':<25} {'P':>8} {'R':>8} {'F1':>8} {'TP':>6} {'FP':>6} {'FN':>6} {'Support':>8}")
+    print("-" * 80)
+
+    for entity_type, m in sorted(metrics['per_class'].items()):
+        print(f"{entity_type:<25} {m['precision']:>8.4f} {m['recall']:>8.4f} {m['f1']:>8.4f} "
+              f"{m['tp']:>6} {m['fp']:>6} {m['fn']:>6} {m['support']:>8}")
+
+    print("-" * 80)
+    m = metrics['micro']
+    print(f"{'Micro-avg':<25} {m['precision']:>8.4f} {m['recall']:>8.4f} {m['f1']:>8.4f} "
+          f"{m['tp']:>6} {m['fp']:>6} {m['fn']:>6}")
+    m = metrics['macro']
+    print(f"{'Macro-avg':<25} {m['precision']:>8.4f} {m['recall']:>8.4f} {m['f1']:>8.4f}")
+    print("=" * 80)
+    print()
+    print(f"Summary:")
+    print(f"  Documents: {num_docs}")
+    print(f"  Gold entities: {num_gold}")
+    print(f"  Predicted entities: {num_pred}")
+
+
+def load_binder_dataset(input_path: str) -> list:
+    """
+    Load dataset in Binder HFDS format.
+
+    Args:
+        input_path: Path to JSON/JSONL file with Binder format data
+
+    Returns:
+        List of documents with text and entity annotations
+    """
+    import json
+
+    data = []
+    with open(input_path, 'r', encoding='utf-8') as f:
+        content = f.read().strip()
+        # Try to parse as JSON array first
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            # Try JSONL format (one JSON object per line)
+            f.seek(0)
+            for line in f:
+                line = line.strip()
+                if line:
+                    data.append(json.loads(line))
+
+    documents = []
+    for item in data:
+        doc = {
+            'id': item.get('id', len(documents)),
+            'text': item['text'],
+            'entities': []
+        }
+
+        # Extract gold entities from the Binder format
+        entity_types = item.get('entity_types', [])
+        entity_start_chars = item.get('entity_start_chars', [])
+        entity_end_chars = item.get('entity_end_chars', [])
+
+        for i in range(len(entity_types)):
+            start = entity_start_chars[i]
+            end = entity_end_chars[i]
+            entity_text = item['text'][start:end]
+            doc['entities'].append((start, end, entity_types[i], entity_text))
+
+        documents.append(doc)
+
+    return documents
+
+
+def evaluate_on_dataset(
+    config_path: str,
+    input_path: str,
+    output_path: str = None,
+    metrics_output: str = "binder_metrics.json",
+    measure_time: bool = False,
+    timing_output: str = "binder_timing.json",
+    device: str = "auto",
+    threshold_factor: float = 1.0
+):
+    """
+    Evaluate Binder model on a dataset.
+
+    Args:
+        config_path: Path to Binder configuration JSON
+        input_path: Path to input dataset (Binder HFDS format)
+        output_path: Path to save predictions (optional)
+        metrics_output: Path to save metrics JSON
+        measure_time: Whether to measure timing
+        timing_output: Path to save timing JSON
+        device: Device to use (auto, cpu, cuda)
+        threshold_factor: Factor to adjust prediction threshold
+    """
+    import json
+    import time
+    from tqdm import tqdm
+
+    timing = TimingStats() if measure_time else None
+
+    print(f"Loading dataset from {input_path}...")
+    documents = load_binder_dataset(input_path)
+    print(f"Loaded {len(documents)} documents")
+
+    print(f"\nInitializing BinderInference...")
+    if timing:
+        timing.start("model_loading")
+
+    inferencer = BinderInference(
+        config_path=config_path,
+        device=device,
+        prediction_threshold_factor=threshold_factor
+    )
+
+    # Warm up the model
+    print("Warming up model...")
+    inferencer.warm_up()
+
+    if timing:
+        timing.stop()
+        print(f"Model loaded on {inferencer.device}")
+
+    print(f"\nRunning inference on {len(documents)} documents...")
+
+    all_predictions = []
+    all_gold = []
+    results = []
+
+    if timing:
+        timing.start("inference_per_doc")
+
+    for doc in tqdm(documents, desc="Inference"):
+        if timing:
+            doc_start = time.time()
+
+        # Run prediction
+        predictions = inferencer.predict(doc['text'])
+
+        if timing:
+            doc_elapsed = time.time() - doc_start
+            timing.stats.setdefault("inference_per_doc", {
+                'total': 0.0, 'count': 0, 'min': float('inf'), 'max': 0.0
+            })
+            timing.stats["inference_per_doc"]['total'] += doc_elapsed
+            timing.stats["inference_per_doc"]['count'] += 1
+            timing.stats["inference_per_doc"]['min'] = min(timing.stats["inference_per_doc"]['min'], doc_elapsed)
+            timing.stats["inference_per_doc"]['max'] = max(timing.stats["inference_per_doc"]['max'], doc_elapsed)
+
+        all_predictions.append(predictions)
+        all_gold.append(doc['entities'])
+
+        results.append({
+            'doc_id': doc['id'],
+            'text': doc['text'],
+            'predictions': predictions,
+            'gold': doc['entities']
+        })
+
+    print("\nComputing metrics...")
+    if timing:
+        timing.start("metrics_calculation")
+
+    metrics = compute_metrics(all_predictions, all_gold)
+
+    if timing:
+        timing.stop()
+
+    # Count entities
+    num_gold = sum(len(g) for g in all_gold)
+    num_pred = sum(len(p) for p in all_predictions)
+
+    # Print metrics
+    print_metrics(metrics, len(documents), num_gold, num_pred)
+
+    # Save predictions
+    if output_path:
+        print(f"\nSaving predictions to {output_path}...")
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(results, f, ensure_ascii=False, indent=2)
+
+    # Save metrics
+    print(f"Saving metrics to {metrics_output}...")
+    metrics_data = {
+        'summary': {
+            'num_documents': len(documents),
+            'gold_entities': num_gold,
+            'predicted_entities': num_pred
+        },
+        **metrics
+    }
+    with open(metrics_output, 'w', encoding='utf-8') as f:
+        json.dump(metrics_data, f, ensure_ascii=False, indent=2)
+
+    # Save timing
+    if timing:
+        print(f"Saving timing to {timing_output}...")
+        timing_data = timing.get_summary()
+        timing_data['total_sec'] = round(
+            timing_data.get('model_loading_total_sec', 0) +
+            timing_data.get('inference_per_doc_total_sec', 0) +
+            timing_data.get('metrics_calculation_total_sec', 0),
+            3
+        )
+        timing_data['num_documents'] = len(documents)
+        if len(documents) > 0:
+            timing_data['throughput_docs_per_sec'] = round(
+                len(documents) / timing_data.get('inference_per_doc_total_sec', 1), 1
+            )
+
+        with open(timing_output, 'w', encoding='utf-8') as f:
+            json.dump(timing_data, f, indent=2)
+
+        print(f"\nTiming statistics:")
+        for key, value in timing_data.items():
+            print(f"  {key}: {value}")
+
+    print("\nDone!")
+    return metrics
+
+
+def main():
+    """CLI entry point for Binder evaluation."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Binder NER Inference and Evaluation",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Evaluate on NEREL test set
+  python -m src.inference \\
+      --config ./conf/inference/text2ner-nerel/config.json \\
+      --input ./data/NEREL-binder/test.json \\
+      --output ./predictions.json \\
+      --metrics_output ./metrics.json \\
+      --measure_time
+        """
+    )
+
+    parser.add_argument('--config', '-c', type=str, required=True,
+                        help='Path to Binder configuration JSON file')
+    parser.add_argument('--input', '-i', type=str, required=True,
+                        help='Path to input dataset (Binder HFDS format JSON)')
+    parser.add_argument('--output', '-o', type=str, default=None,
+                        help='Path to save predictions JSON (optional)')
+    parser.add_argument('--metrics_output', type=str, default='binder_metrics.json',
+                        help='Path to save metrics JSON (default: binder_metrics.json)')
+    parser.add_argument('--device', '-d', type=str, default='auto',
+                        choices=['auto', 'cpu', 'cuda'],
+                        help='Device to use for inference (default: auto)')
+    parser.add_argument('--threshold_factor', '-t', type=float, default=1.0,
+                        help='Factor to adjust prediction threshold (default: 1.0)')
+    parser.add_argument('--measure_time', action='store_true',
+                        help='Enable timing measurements')
+    parser.add_argument('--timing_output', type=str, default='binder_timing.json',
+                        help='Path to save timing JSON (default: binder_timing.json)')
+
+    args = parser.parse_args()
+
+    evaluate_on_dataset(
+        config_path=args.config,
+        input_path=args.input,
+        output_path=args.output,
+        metrics_output=args.metrics_output,
+        measure_time=args.measure_time,
+        timing_output=args.timing_output,
+        device=args.device,
+        threshold_factor=args.threshold_factor
+    )
+
+
+if __name__ == "__main__":
+    main()

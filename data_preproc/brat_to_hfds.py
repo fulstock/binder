@@ -16,9 +16,11 @@ ru_tokenizer = load("tokenizers/punkt/russian.pickle") # Загрузка ток
 word_tokenizer = NLTKWordTokenizer()
 
 brat2mrc_parser = argparse.ArgumentParser(description = "Brat to hfds-json formatter script.")
-brat2mrc_parser.add_argument('--brat_dataset_path', type = str, required = True, help = "Path to brat dataset (with train, dev, test dirs).")
+brat2mrc_parser.add_argument('--brat_dataset_path', type = str, required = True, help = "Path to brat dataset (with train, dev, test dirs, or a single flat directory with --single_dir).")
 brat2mrc_parser.add_argument('--tags_path', type = str, required = True, help = 'Path to tags file with format ["CLASS1", "CLASS2", ...].')
 brat2mrc_parser.add_argument('--hfds_output_path', type = str, default = None, help = "Path, where formatted dataset would be stored. By default, same path as in --brat_dataset_path would be used.")
+brat2mrc_parser.add_argument('--single_dir', action = 'store_true', help = "Treat brat_dataset_path as a single flat directory (no train/dev/test subdirs). Output filename defaults to 'train.json'.")
+brat2mrc_parser.add_argument('--output_name', type = str, default = 'train', help = "Output JSON filename (without .json) when using --single_dir. Default: 'train'.")
 
 args = brat2mrc_parser.parse_args()
 
@@ -35,21 +37,25 @@ with open(tags_path, "r") as tags_file:
 
 print(tags)
 
-sets = ["train", "dev", "test"]
+if args.single_dir:
+    sets = [(args.output_name, brat_dataset_path)]
+else:
+    sets = [("train", os.path.join(brat_dataset_path, "train")),
+            ("dev", os.path.join(brat_dataset_path, "dev")),
+            ("test", os.path.join(brat_dataset_path, "test"))]
 
-for ds in sets:
+for ds_name, dataset_path in sets:
 
-    print(ds + " set:")
+    print(ds_name + " set:")
 
-    jsonpath = os.path.join(hfds_output_path, ds + ".json")
-    dataset_path = os.path.join(brat_dataset_path, ds)
+    jsonpath = os.path.join(hfds_output_path, ds_name + ".json")
 
     jsondir = os.path.dirname(jsonpath)
 
     if not os.path.exists(jsondir):
         os.makedirs(jsondir)
 
-    jsonfile = open(jsonpath, "w", encoding='UTF-8') 
+    jsonfile = open(jsonpath, "w", encoding='UTF-8')
 
     doc_count = 0
     entities_count = 0
@@ -103,7 +109,7 @@ for ds in sets:
                     text = ''
 
                     sentence_spans = ru_tokenizer.span_tokenize(txtdata)
-                    
+
                     for span in sentence_spans:
 
                         start, end = span
