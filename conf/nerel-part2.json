@@ -13,7 +13,7 @@
     "use_span_width_embedding": true,
     "doc_stride": 16,
     "preprocessing_num_workers": 1,
-    "dataloader_num_workers": 1,
+    "dataloader_num_workers": 4,
     "overwrite_cache": false,
     "overwrite_output_dir": true,
     "do_train": true,
@@ -35,5 +35,7 @@
     "do_eval": true,
     "evaluation_strategy": "steps",
     "eval_steps": 100,
-    "do_predict": true
+    "do_predict": true,
+    "dataloader_pin_memory": true,
+    "dataloader_persistent_workers" : true
 }
