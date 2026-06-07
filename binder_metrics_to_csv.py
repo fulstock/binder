@@ -21,9 +21,22 @@ from typing import List, Dict, Any, Optional
 
 
 def load_metrics(file_path: str) -> Dict[str, Any]:
-    """Load metrics from JSON file."""
+    """Load metrics from JSON file. Handles JSONL (multiple runs) by taking the last entry."""
     with open(file_path, 'r', encoding='utf-8') as f:
-        return json.load(f)
+        try:
+            return json.load(f)
+        except json.JSONDecodeError:
+            pass
+    # Fall back to JSONL: take the last complete JSON object
+    with open(file_path, 'r', encoding='utf-8') as f:
+        last = None
+        for line in f:
+            line = line.strip()
+            if line:
+                last = json.loads(line)
+        if last is None:
+            raise ValueError(f"No valid JSON found in {file_path}")
+        return last
 
 
 def metrics_to_csv_single_mode(
@@ -53,6 +66,18 @@ def metrics_to_csv_single_mode(
             f"{data.get('f1', 0):.4f}"
         ]
         rows.append(row)
+
+    # Macro averages
+    if entity_types:
+        macro_p = sum(mode_data[et].get('precision', 0) for et in entity_types) / len(entity_types)
+        macro_r = sum(mode_data[et].get('recall', 0) for et in entity_types) / len(entity_types)
+        macro_f1 = sum(mode_data[et].get('f1', 0) for et in entity_types) / len(entity_types)
+        rows.append([
+            "ALL (macro)",
+            f"{macro_p:.4f}",
+            f"{macro_r:.4f}",
+            f"{macro_f1:.4f}"
+        ])
 
     # Overall metrics
     if "all" in mode_data:
@@ -100,6 +125,17 @@ def metrics_to_csv_all_modes(metrics: Dict[str, Any]) -> List[List[str]]:
                 f"{data.get('f1', 0):.4f}"
             ])
         rows.append(row)
+
+    # Macro averages
+    if all_entity_types:
+        macro_row = ["ALL (macro)"]
+        for mode in available_modes:
+            ets = [k for k in metrics[mode].keys() if k != "all"]
+            macro_p = sum(metrics[mode][et].get('precision', 0) for et in ets) / len(ets) if ets else 0
+            macro_r = sum(metrics[mode][et].get('recall', 0) for et in ets) / len(ets) if ets else 0
+            macro_f1 = sum(metrics[mode][et].get('f1', 0) for et in ets) / len(ets) if ets else 0
+            macro_row.extend([f"{macro_p:.4f}", f"{macro_r:.4f}", f"{macro_f1:.4f}"])
+        rows.append(macro_row)
 
     # Overall metrics
     overall_row = ["ALL (micro)"]
@@ -150,6 +186,17 @@ def metrics_to_csv_comparison(
                 f"{data.get('f1', 0):.4f}"
             ])
         rows.append(row)
+
+    # Macro averages
+    if all_entity_types:
+        macro_row = ["ALL (macro)"]
+        for model in model_names:
+            ets = [k for k in all_metrics[model].keys() if k != "all"]
+            macro_p = sum(all_metrics[model][et].get('precision', 0) for et in ets) / len(ets) if ets else 0
+            macro_r = sum(all_metrics[model][et].get('recall', 0) for et in ets) / len(ets) if ets else 0
+            macro_f1 = sum(all_metrics[model][et].get('f1', 0) for et in ets) / len(ets) if ets else 0
+            macro_row.extend([f"{macro_p:.4f}", f"{macro_r:.4f}", f"{macro_f1:.4f}"])
+        rows.append(macro_row)
 
     # Overall
     overall_row = ["ALL (micro)"]
