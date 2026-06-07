@@ -103,6 +103,52 @@ def load_tokenizer_with_fallback(model_name_or_path, cache_dir=None, use_fast=Fa
             raise
 
 
+def _assert_stride_fits_entities(tokenizer, raw_datasets, doc_stride):
+    """Refuse to run if any gold entity is longer (in tokens) than doc_stride.
+
+    The sliding window must guarantee that every entity is fully contained in
+    at least one chunk; otherwise straddling entities silently disappear from
+    training labels (run_ner.py prepare_train_features) and can't be recovered
+    at inference. Fail fast with a clear message rather than train on degraded
+    data.
+    """
+    worst = (0, None, None, None, None)  # (tok_len, split, ex_id, text, entity)
+    for split, ds in raw_datasets.items():
+        for ex in ds:
+            text = ex.get("text", "")
+            types = ex.get("entity_types") or []
+            starts = ex.get("entity_start_chars") or []
+            ends = ex.get("entity_end_chars") or []
+            if not types:
+                continue
+            enc = tokenizer(text, return_offsets_mapping=True, add_special_tokens=False)
+            offsets = enc["offset_mapping"]
+            n = len(offsets)
+            for et, sc, ec in zip(types, starts, ends):
+                s = 0
+                while s < n and offsets[s][0] <= sc and offsets[s][1] <= sc:
+                    s += 1
+                e = s
+                while e < n and offsets[e][1] < ec:
+                    e += 1
+                tok_len = e - s + 1
+                if tok_len > worst[0]:
+                    worst = (tok_len, split, ex.get("id"), text[sc:ec], et)
+    max_len, split, ex_id, ent_text, et = worst
+    if max_len > doc_stride:
+        raise ValueError(
+            f"doc_stride={doc_stride} is too small for the dataset. "
+            f"Longest gold entity is {max_len} tokens "
+            f"(split={split!r}, example_id={ex_id!r}, type={et!r}, text={ent_text!r}). "
+            f"With this stride, entities at chunk boundaries would not fit fully into "
+            f"any single chunk and would silently disappear from training labels. "
+            f"Raise doc_stride to >= {max_len} or shorten/exclude the offending entities."
+        )
+    logger.info(
+        f"Stride invariant OK: max entity token length = {max_len}, doc_stride = {doc_stride}."
+    )
+
+
 @dataclass
 class ModelArguments:
     """
@@ -418,6 +464,8 @@ def main():
             f"model ({tokenizer.model_max_length}). Using max_seq_length={tokenizer.model_max_length}."
         )
     max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
+
+    _assert_stride_fits_entities(tokenizer, raw_datasets, data_args.doc_stride)
 
     # Load entity type knowledge
     entity_type_knowledge = load_dataset(
