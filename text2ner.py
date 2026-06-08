@@ -90,26 +90,24 @@ class SafeWordTokenizer:
             return self.word_pattern.findall(text)
     
     def span_tokenize(self, text):
-        """Return word spans (start, end) positions"""
+        """Return word spans (start, end) positions, refined on inner punctuation."""
+        from src.word_boundaries import refine_word_spans
+
+        spans = None
         if self._use_nltk:
             try:
-                # Ensure we return a generator that actually works
                 spans = list(self.nltk_tokenizer.span_tokenize(text))
-                if spans:  # If NLTK actually found spans
-                    for span in spans:
-                        yield span
-                else:
-                    # Fallback to regex if NLTK returns empty
-                    for match in self.word_pattern.finditer(text):
-                        yield (match.start(), match.end())
+                if not spans:
+                    spans = None
             except Exception as e:
                 print(f"NLTK span_tokenize failed during execution: {e}. Using regex fallback.")
-                # Fallback to regex
-                for match in self.word_pattern.finditer(text):
-                    yield (match.start(), match.end())
-        else:
-            for match in self.word_pattern.finditer(text):
-                yield (match.start(), match.end())
+                spans = None
+
+        if spans is None:
+            spans = [(m.start(), m.end()) for m in self.word_pattern.finditer(text)]
+
+        for span in refine_word_spans(text, spans):
+            yield span
 
 @dataclass
 class ModelArguments:

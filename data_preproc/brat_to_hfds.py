@@ -1,11 +1,15 @@
 import json
 import os
+import sys
 import argparse
 
 from nltk.data import load
 from nltk.tokenize import NLTKWordTokenizer
 
 from tqdm.auto import tqdm
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from src.word_boundaries import refine_word_spans
 
 # ## Закомментируйте после первой загрузки пакета. 
 import nltk
@@ -115,7 +119,8 @@ for ds_name, dataset_path in sets:
                         start, end = span
                         context = txtdata[start : end]
 
-                        word_spans = word_tokenizer.span_tokenize(context)
+                        word_spans = list(word_tokenizer.span_tokenize(context))
+                        word_spans = refine_word_spans(context, word_spans)
                         offset_mapping.extend([(s + start, e + start) for s, e in word_spans])
 
                     try:

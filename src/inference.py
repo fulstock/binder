@@ -158,19 +158,21 @@ class SafeWordTokenizer:
             self.nltk_tokenizer = None
 
     def span_tokenize(self, text):
-        """Tokenize text with fallback to regex."""
+        """Tokenize text with fallback to regex, then refine on inner punctuation."""
+        from src.word_boundaries import refine_word_spans
+
+        spans = None
         if self.nltk_tokenizer:
             try:
-                return list(self.nltk_tokenizer.span_tokenize(text))
+                spans = list(self.nltk_tokenizer.span_tokenize(text))
             except Exception:
-                pass
+                spans = None
 
-        # Regex fallback
-        import re
-        spans = []
-        for match in re.finditer(r'\S+', text):
-            spans.append((match.start(), match.end()))
-        return spans
+        if spans is None:
+            import re
+            spans = [(m.start(), m.end()) for m in re.finditer(r'\S+', text)]
+
+        return refine_word_spans(text, spans)
 
 
 class BinderInference:

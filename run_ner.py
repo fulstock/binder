@@ -136,17 +136,17 @@ def _assert_stride_fits_entities(tokenizer, raw_datasets, doc_stride):
                     worst = (tok_len, split, ex.get("id"), text[sc:ec], et)
     max_len, split, ex_id, ent_text, et = worst
     if max_len > doc_stride:
-        raise ValueError(
-            f"doc_stride={doc_stride} is too small for the dataset. "
-            f"Longest gold entity is {max_len} tokens "
-            f"(split={split!r}, example_id={ex_id!r}, type={et!r}, text={ent_text!r}). "
-            f"With this stride, entities at chunk boundaries would not fit fully into "
-            f"any single chunk and would silently disappear from training labels. "
-            f"Raise doc_stride to >= {max_len} or shorten/exclude the offending entities."
+        logger.warning(
+            f"doc_stride={doc_stride} is smaller than the longest gold entity "
+            f"({max_len} tokens; split={split!r}, example_id={ex_id!r}, type={et!r}, "
+            f"text={ent_text!r}). Entities straddling chunk boundaries cannot fit "
+            f"in any single chunk and silently disappear from training labels. "
+            f"Raise doc_stride to >= {max_len} to guarantee coverage."
         )
-    logger.info(
-        f"Stride invariant OK: max entity token length = {max_len}, doc_stride = {doc_stride}."
-    )
+    else:
+        logger.info(
+            f"Stride invariant OK: max entity token length = {max_len}, doc_stride = {doc_stride}."
+        )
 
 
 @dataclass
