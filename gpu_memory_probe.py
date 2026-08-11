@@ -168,6 +168,8 @@ def main():
     print(f"  GPU        : {device_name} ({total_gb:.1f} GB)")
 
     model = Binder.from_pretrained(ckpt)
+    model = model.cuda()
+    torch.cuda.empty_cache()
     params = count_params(model)
 
     print(f"\n  Parameter breakdown:")
