@@ -157,7 +157,7 @@ def main():
         sys.exit(1)
 
     device_name = torch.cuda.get_device_name(0)
-    total_gpu_mem = torch.cuda.get_device_properties(0).total_mem
+    total_gpu_mem = torch.cuda.get_device_properties(0).total_memory
     total_gb = total_gpu_mem / (1024**3)
 
     # ------------------------------------------------------------------
